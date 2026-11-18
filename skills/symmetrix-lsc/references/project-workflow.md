@@ -7,8 +7,10 @@ provenance, species, coordinates, formal-charge/field requirements, PBC and atom
 type numbering. Retain an existing input's requested temperature, pressure,
 timestep, duration and output choices unless explaining a necessary correction.
 
-Use an environment containing this fork and reference MACE-SCF. Export to a new
-project file, preserving existing exports:
+Activate the stable environment described in the runtime reference. It contains
+non-editable pinned Symmetrix and MACE-SCF packages. Do not add development
+checkouts to its Python path or install project dependencies into this frozen
+environment. Export to a new project file, preserving existing exports:
 
 ```bash
 python -m symmetrix.cli.extract_mace \

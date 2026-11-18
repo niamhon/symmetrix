@@ -1,20 +1,26 @@
 ---
 name: symmetrix-lsc
-description: Export LocalSplitCharges MACE-SCF models for the native Symmetrix LSC backend, validate predictions against ASE, and prepare or run LAMMPS simulations for new projects. Use for this LSC implementation and the existing Rusty environments, rather than MACE-POLAR, foundation MACE, or model training.
+description: Export LocalSplitCharges MACE-SCF models for the native Symmetrix LSC backend, validate predictions against ASE, and prepare or run LAMMPS simulations using the stable Rusty installation. Use for this LSC implementation, rather than MACE-POLAR, foundation MACE, or model training.
 ---
 
 # Symmetrix LSC
 
-Use `https://github.com/niamhon/symmetrix`, branch `symmetrix/lsc-mace`.
+Use the validated stable installation for new scientific projects. Its initial
+release is pinned to `2762b9fc10791220eef38edbe8e3fd70a9a1a124` from
+`https://github.com/niamhon/symmetrix`. Development continues separately on branch
+`symmetrix/lsc-mace` in `symmetrix-dev`; do not redirect ordinary project jobs to
+its editable environment or binary.
+
 The exporter, native CPU/CUDA evaluator and LAMMPS pair belong to Symmetrix;
-original MACE-SCF supplies the ASE reference. Inspect the actual branch, working
-tree and loaded module: a directory named `symmetrix-dev` does not establish its
-version.
+pinned original MACE-SCF supplies the ASE reference. Resolve the stable release
+once during project setup and record that physical path in the run scripts and
+manifest. Preserve each released environment and binary; promote later validated
+versions into new release directories instead of rebuilding an existing release.
 
 Read [the project workflow](references/project-workflow.md) for a new model or
 simulation. Read [the runtime reference](references/rusty-runtime.md) for Rusty
 paths, environments, launchers and installation on another host. Reuse an
-existing suitable setup; installing on a new host is a separate task.
+existing stable setup; installing on a new host is a separate task.
 
 ## Essential decisions
 
