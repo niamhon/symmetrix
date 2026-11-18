@@ -1,0 +1,4 @@
+interface:
+  display_name: "Symmetrix LSC"
+  short_description: "Export and run LSC-MACE with Symmetrix and LAMMPS"
+  default_prompt: "Use $symmetrix-lsc to export and validate my LSC model, then prepare the requested simulation for this project."
