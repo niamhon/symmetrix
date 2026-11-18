@@ -27,8 +27,8 @@ def main():
     parser.add_argument(
         "--head",
         "-H",
-        help="Head to keep, ignored unless model is multihead. "
-        "Defaults to first non-PT head, same as mace.tools.script_utils.remove_pt_head",
+        help="Head to keep for multihead MACE; LSC validates its single head. "
+        "Defaults to first non-PT head for MACE, as in mace.tools.script_utils.remove_pt_head",
     )
     parser.add_argument(
         "--num-spline-points",
@@ -56,8 +56,8 @@ def main():
     args = parser.parse_args()
 
     import json
-    from pathlib import Path
     from importlib.metadata import version
+    from pathlib import Path
 
     if len(Path(args.model).suffix) == 0:
         model_name = Path(args.model).name
@@ -75,15 +75,26 @@ def main():
         r_min=args.r_min,
         compression_margin=args.compress_basis,
     )
-    output["extracted_with"] = {
-        p: version(p) for p in ("symmetrix", "mace-torch", "torch")
-    }
+    packages = ("symmetrix", "mace-torch", "torch")
+    if output.get("model_type") == "LocalSplitCharges":
+        packages += ("mace-scf", "graph-longrange", "e3nn")
+    output["extracted_with"] = {p: version(p) for p in packages}
 
     ### ----- WRITE JSON -----
 
     if args.output is None:
         args.output = (
             model_name + "-" + "-".join(str(a) for a in sorted(species)) + ".json"
+        )
+    if output.get("export_status") == "architecture_only":
+        print(
+            "LSC ARCHITECTURE ONLY: learned layer parameters and radial splines "
+            "are not exported yet; this file is not runnable."
+        )
+    if output.get("export_status") == "parameters_and_splines":
+        print(
+            "LSC PARAMETERS AND SPLINES: neural and electrostatic energy parameters "
+            "are exported for native finite-cluster/fully-periodic energy, force and stress evaluation. "
         )
     print("WRITING JSON TO", args.output)
     with open(args.output, "w") as f:

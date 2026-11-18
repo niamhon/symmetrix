@@ -4,3 +4,11 @@ build
 *.whl
 /checkpoints/
 ._*
+
+# Local LSC reference model and job/build output.
+/.lsc-reference-data/
+/.lsc-reference-logs/
+!symmetrix/test/lsc/data/water_stage2/manifest.json
+
+# Isolated CUDA development build.
+/symmetrix/build-lsc-cuda/

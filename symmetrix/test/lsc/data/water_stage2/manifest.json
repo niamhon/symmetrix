@@ -1,0 +1,256 @@
+{
+  "schema_version": 1,
+  "purpose": "Frozen original MACE-SCF predictions; no Symmetrix LSC evaluator exists yet",
+  "created_utc": "2026-11-16T20:51:22.010058+00:00",
+  "model": {
+    "source": "/mnt/home/noneill/ceph/reactive_water-1/dft2dft/fresh_baselines/direct-cluster-to-bulk/inter-intra/pbed3/dipole_test/03_train/energy100_force100/seed1/direct_c2b_pbed3_energy100_force100_seed1_stage2.model",
+    "sha256": "47a453e928adaf66efe67f5b4e9436322cbdc77ca211aa610dbd55a650634a79",
+    "default_copy_relative_to_repo": ".lsc-reference-data/water_stage2.model",
+    "architecture": {
+      "class": "LocalSplitCharges",
+      "heads": [
+        "Default"
+      ],
+      "atomic_numbers": [
+        1,
+        8
+      ],
+      "num_interactions": 2,
+      "hidden_irreps": "128x0e+128x1o",
+      "max_ell": 3,
+      "correlation": [
+        3,
+        3
+      ],
+      "r_max_A": 6.0,
+      "interactions": [
+        "RealAgnosticResidualInteractionBlock",
+        "RealAgnosticResidualInteractionBlock"
+      ],
+      "readouts": [
+        "LinearReadoutBlock",
+        "LinearReadoutBlock"
+      ],
+      "source_maps": [
+        "OxidationDependentSymmetricPredictionSourceBlock",
+        "OxidationDependentSymmetricPredictionSourceBlock"
+      ],
+      "oxidation_state_mixer": "SumOxidationStateMixer",
+      "formal_charge_block": "PerSpeciesFormalChargesBlock",
+      "formal_charges": [
+        1.0,
+        -2.0
+      ],
+      "density_max_l": 1,
+      "density_smearing_width_A": 1.5,
+      "kspace_cutoff_inverse_A": 1.8467166200173746,
+      "include_self_interaction": true,
+      "parameter_dtype": "torch.float64"
+    }
+  },
+  "reference": {
+    "python": "3.12.9 (main, Jun 12 2025, 02:14:33) [GCC 13.3.0]",
+    "python_executable": "/mnt/home/noneill/Programs/venvs/mace-scf/bin/python",
+    "packages": {
+      "mace-torch": "0.3.14",
+      "mace-scf": "0.4.4",
+      "graph-longrange": "0.4.3",
+      "torch": "2.14.0",
+      "e3nn": "0.4.4",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "ase": "3.29.0"
+    },
+    "device": "cpu",
+    "dtype": "float64",
+    "compile": false,
+    "threads": 4,
+    "symmetrix_base_commit": "b907f04026f2dda4c43d66511a7c37db8a82a7d4",
+    "mace_scf_source": "/mnt/home/noneill/Programs/mace-scf-dev-niamh",
+    "mace_scf_commit": "4d1fe8a40481be0c73507f0761f5eaf2b1d32468",
+    "graph_longrange_source": "/mnt/home/noneill/Programs/venvs/mace-scf/lib/python3.12/site-packages/graph_longrange"
+  },
+  "units": {
+    "energy": "eV",
+    "forces": "eV/Angstrom",
+    "dipole": "e*Angstrom",
+    "partial_charges": "e",
+    "partial_dipoles": "e*Angstrom",
+    "stress": "eV/Angstrom^3"
+  },
+  "density_coefficient_order": [
+    "q",
+    "dipole_y",
+    "dipole_z",
+    "dipole_x"
+  ],
+  "stress_voigt_order": [
+    "xx",
+    "yy",
+    "zz",
+    "yz",
+    "xz",
+    "xy"
+  ],
+  "cases": {
+    "dimer": {
+      "source": "/mnt/home/noneill/ceph/reactive_water-1/dft2dft/fresh_baselines/direct-cluster-to-bulk/inter-intra/pbed3/dipole_test/03_train/energy100_force100/seed1/test.xyz",
+      "source_file_sha256": "14c1213f8dbacf5651d017f62ad3e484f5e8afd1eaf14a74106e0a66fe84a77f",
+      "frame_index": 154,
+      "source_label": "pbed3_P2000_id15591_O0_R25",
+      "num_atoms": 6,
+      "pbc": [
+        false,
+        false,
+        false
+      ],
+      "cell_A": [
+        [
+          30.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          30.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          30.0
+        ]
+      ],
+      "cell_note": "Explicit 30 A nonperiodic cell matches reference loader fallback",
+      "pbc_handling": "realspace",
+      "include_stress": false,
+      "total_formal_charge": 0.0,
+      "external_field": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "geometry_file": "dimer.extxyz",
+      "geometry_sha256": "2015acec528e097533b233422679ad9a80b430723cca5a3dfd88f900c441112a",
+      "reference_file": "dimer.reference.npz",
+      "reference_sha256": "fc42b840816b9146139ab029c7e428c4dfe23cd7fbf13276795ef8f1429e692b",
+      "outputs": {
+        "energy": {
+          "shape": []
+        },
+        "forces": {
+          "shape": [
+            6,
+            3
+          ]
+        },
+        "dipole": {
+          "shape": [
+            3
+          ]
+        },
+        "partial_charges": {
+          "shape": [
+            6
+          ]
+        },
+        "partial_dipoles": {
+          "shape": [
+            6,
+            3
+          ]
+        },
+        "density_coefficients": {
+          "shape": [
+            6,
+            4
+          ]
+        }
+      },
+      "energy_eV": -4161.832661084869,
+      "outputs_sha256": "fc42b840816b9146139ab029c7e428c4dfe23cd7fbf13276795ef8f1429e692b"
+    },
+    "bulk": {
+      "source": "/mnt/home/noneill/ceph/reactive_water-1/dft2dft/fresh_baselines/direct-cluster-to-bulk/inter-intra/pbed3/dipole_test/03_train/energy100_force100/periodic_gen2_pbed3_filtered.extxyz",
+      "source_file_sha256": "220a2c92ccf49c2cb9f2bfdee1e64ae7b27fb069016c5f71e9c430fcadc643da",
+      "frame_index": 0,
+      "source_label": null,
+      "num_atoms": 192,
+      "pbc": [
+        true,
+        true,
+        true
+      ],
+      "cell_A": [
+        [
+          12.37883186340332,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          12.37883186340332,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          12.37883186340332
+        ]
+      ],
+      "cell_note": "Original cell",
+      "pbc_handling": "mixed_periodic",
+      "include_stress": true,
+      "total_formal_charge": 0.0,
+      "external_field": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "geometry_file": "bulk.extxyz",
+      "geometry_sha256": "6c84c0eccb8c2cac65c7f7868109dc41fccc71cd04a9574c0fb61a93ab7e8bad",
+      "reference_file": "bulk.reference.npz",
+      "reference_sha256": "e09b9ecb3f192486f3f9fa8d653319fa395bb9616ea6975402a83b8aca5dc283",
+      "outputs": {
+        "energy": {
+          "shape": []
+        },
+        "forces": {
+          "shape": [
+            192,
+            3
+          ]
+        },
+        "dipole": {
+          "shape": [
+            3
+          ]
+        },
+        "partial_charges": {
+          "shape": [
+            192
+          ]
+        },
+        "partial_dipoles": {
+          "shape": [
+            192,
+            3
+          ]
+        },
+        "density_coefficients": {
+          "shape": [
+            192,
+            4
+          ]
+        },
+        "stress": {
+          "shape": [
+            6
+          ]
+        }
+      },
+      "energy_eV": -133214.05739849756,
+      "outputs_sha256": "e09b9ecb3f192486f3f9fa8d653319fa395bb9616ea6975402a83b8aca5dc283"
+    }
+  }
+}

@@ -53,6 +53,9 @@ set(SYMMETRIX_BINDINGS
     source/cpp/cubic_spline.cpp
     source/cpp/cubic_spline_set.cpp
     source/cpp/mace.cpp
+    source/cpp/mace_lsc.cpp
+    source/cpp/mace_lsc_mesh.cpp
+    source/cpp/mace_lsc_cuda.cpp
     source/cpp/mace_polar.cpp
     source/cpp/multilayer_perceptron.cpp
     source/cpp/multivariate_polynomial.cpp

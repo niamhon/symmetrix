@@ -70,6 +70,20 @@ def extract_mace_data(
     # ensure that splines goes smoothly to 0 at outer cutoff
     spline_bc_type = ("not-a-knot", "clamped")
 
+    # LSC owns its head validation. Generic MACE head conversion can rebuild
+    # the model without its charge-transfer blocks.
+    if type(model).__name__ == "LocalSplitCharges":
+        from .extract_mace_lsc import extract_mace_data_lsc
+
+        return extract_mace_data_lsc(
+            model,
+            atomic_numbers,
+            num_spline_points,
+            r_min,
+            head=head,
+            compression_margin=compression_margin,
+        )
+
     ### ----- EXTRACT SINGLE HEAD -----
 
     if hasattr(model, "heads") and len(model.heads) != 1:

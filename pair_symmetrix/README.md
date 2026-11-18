@@ -229,3 +229,60 @@ GEMMs on fp16 tensor cores to float32 accuracy and stores part of the second-lay
 are compiled for those of MACE-POLAR-1 (`l_max` 3, `L_max` 1, correlation order 3, 128 edge channels), checked when the
 model is loaded; other PolarMACE models run with `symmetrix/mace/polar`. On CPUs, MPI processes are faster than OpenMP
 threads.
+
+### LSC MACE models (experimental)
+
+LSC exports from the supported `MACELocalSplitCharges` architecture run with:
+
+```lammps
+pair_style symmetrix/mace/lsc direct
+# GPU FP32: symmetrix/mace/lsc/cuda direct
+# GPU mixed: symmetrix/mace/lsc/cuda direct float32-mixed
+pair_coeff * * lsc-model.json H O
+compute mu all pair symmetrix/mace/lsc
+```
+
+Use `units metal`, `newton on`, and a nonperiodic cluster or a fully periodic
+box. Direct mode uses one MPI process; mesh mode supports one or more. The CUDA style calls the native CUDA evaluator directly; do
+not add a Kokkos suffix. CPU neural evaluation is float64; GPU neural evaluation
+is FP32 or mixed, with double-precision electrostatics and physical reductions.
+The full LSC electrostatic energy is included. Global pressure/stress and per-atom
+energies are supported. Mesh mode supports normal multi-rank MD; per-atom
+stress is not supported. `atom_style charge` receives predicted partial charges. The three
+`compute pair` components are the total dipole in e Angstrom, using unwrapped
+formal-charge coordinates and physical charge-transfer vectors.
+
+The detailed development walkthrough, tested Rusty build setup and commands are
+in [the LSC test guide](../symmetrix/test/lsc/README.md). Pair command syntax is
+also documented in [pair_symmetrix_mace_lsc.rst](pair_symmetrix_mace_lsc.rst).
+
+
+### LSC CPU mesh mode
+
+With the FFTW-enabled LSC mesh build, `pair_style symmetrix/mace/lsc mesh 0.7
+order 8` evaluates energy, analytic forces and global stress using the same
+native mesh solver and learned-source reverse pass as Python. The spacing is
+in Angstrom; the optional spline order defaults to 8. The cell must be periodic
+in all three directions. Per-atom energies, partial charges and total dipole
+are supported as in direct mode. Direct remains the default and is used for
+nonperiodic clusters. Mesh mode supports distributed MPI; per-atom virials are
+not supported. See `pair_symmetrix_mace_lsc.rst` and `symmetrix/test/lsc/README.md` for
+commands and focused test runners.
+
+
+### LSC GPU mesh mode
+
+```lammps
+pair_style symmetrix/mace/lsc/cuda mesh 0.7 order 8 float32-mixed
+pair_coeff * * lsc-model.json H O
+```
+
+Omit `float32-mixed` for FP32 neural layers. GPU mesh follows Polar's local
+cuFFT solver: double-precision assignment, FFTs and analytic electrostatic
+forces/stress, with resident device gradients feeding the learned LSC reverse
+pass. It requires full three-dimensional periodicity and supports one or more
+MPI ranks with host-staged communication. Assign one GPU to each rank for
+multi-GPU runs; multi-GPU performance has not yet been validated. Global stress,
+per-atom energies, charges and dipole are supported.
+CPU/GPU direct mode remains available. See the LSC test guide for the H100
+validation runner and mesh convergence checks.

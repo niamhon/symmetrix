@@ -1,7 +1,7 @@
 pybind11_add_module(nequip_foundation_bindings MODULE bindings.cpp cpu.cpp)
 set_target_properties(nequip_foundation_bindings PROPERTIES OUTPUT_NAME _nequip_foundation)
 target_include_directories(nequip_foundation_bindings PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../../../libsymmetrix/external/json/single_include ${CMAKE_CURRENT_SOURCE_DIR}/../../../../libsymmetrix/source)
-target_compile_options(nequip_foundation_bindings PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-march=native>)
+target_compile_options(nequip_foundation_bindings PRIVATE $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<BOOL:${SYMMETRIX_NATIVE_ARCH}>>:-march=native>)
 set_source_files_properties(cpu.cpp PROPERTIES COMPILE_OPTIONS "$<$<AND:$<CONFIG:Release>,$<NOT:$<CXX_COMPILER_ID:NVHPC>>>:-ffast-math;-fno-finite-math-only>")
 find_package(OpenMP)
 if(OpenMP_CXX_FOUND)
