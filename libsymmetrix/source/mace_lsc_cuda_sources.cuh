@@ -53,6 +53,61 @@ __global__ void source_flux(int N,const int* senders,const int* receivers,
     }
 }
 
+// Polar/foundation receiver batching with the scalar coupling indices checked
+// once by the model loader. Keep exported coefficients and readout arithmetic.
+template<int Splits>
+__global__ void source_flux_batched(int N,const int* starts,const int* order,const int* senders,
+    const float* Y,const int* intervals,const float* coordinate,const float* radial,
+    const float* coefficients,const float* sender_features,const float* receiver_features,
+    const float* readout,const float* bias,const float* scale,float* flux,int* error)
+{
+    constexpr int C=local_channels,F=2*C,Batch=32;
+    // Contiguous staging writes avoid shared-memory bank conflicts. All lanes
+    // subsequently read the same edge geometry via shared-memory broadcasts.
+    __shared__ float y[4][Batch],x[Batch],warp_sums[C/32];
+    __shared__ int edges[Batch],senders_staged[Batch],knots[Batch];
+    const int r=blockIdx.x,u=threadIdx.x;
+    const int first_edge=starts[r],count_edges=starts[r+1]-first_edge;
+    const int begin=first_edge+int((long long)count_edges*blockIdx.y/Splits);
+    const int end=first_edge+int((long long)count_edges*(blockIdx.y+1)/Splits);
+    float receiver[4],cg[4];
+    #pragma unroll
+    for(int lm=0;lm<4;++lm){receiver[lm]=receiver_features[local_row(lm,r,N)*C+u];cg[lm]=coefficients[lm];}
+    const float weight=readout[u];
+    for(int first=begin;first<end;first+=Batch){
+        const int count=min(Batch,end-first);
+        __syncthreads();
+        if(u<count){
+            const int e=order[first+u];edges[u]=e;senders_staged[u]=senders[e];
+            knots[u]=intervals[e];x[u]=coordinate[e];
+            #pragma unroll
+            for(int lm=0;lm<4;++lm)y[lm][u]=Y[size_t(e)*16+lm];
+        }
+        __syncthreads();
+        for(int j=0;j<count;++j){
+            float R[2],derivative;
+            #pragma unroll
+            for(int p=0;p<2;++p)cubic(radial+size_t(knots[j])*4*F,F,p*C+u,x[j],R[p],derivative);
+            float message=0;
+            static_for<4>([&](auto index){
+                constexpr int lm=index,path=lm>0;
+                const float features=sender_features[local_row(lm,senders_staged[j],N)*C+u]+receiver[lm];
+                message+=(cg[lm]*y[lm][j])*features*R[path];
+            });
+            const float sum=source_warp_sum(message*weight);
+            if((u&31)==0)warp_sums[u/32]=sum;
+            __syncthreads();
+            if(u==0){
+                float value=0;for(int w=0;w<C/32;++w)value+=warp_sums[w];
+                value=(value+bias[0])*scale[0];flux[edges[j]]=value;
+                if((__float_as_uint(value)&0x7f800000u)==0x7f800000u)atomicOr(error,2);
+            }
+            // Consume the four warp sums before any warp starts the next edge.
+            __syncthreads();
+        }
+    }
+}
+
 __device__ __forceinline__ bool source_finite(double value)
 {
     return (__double_as_longlong(value)&0x7ff0000000000000LL)!=0x7ff0000000000000LL;

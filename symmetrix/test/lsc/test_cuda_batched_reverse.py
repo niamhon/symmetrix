@@ -20,7 +20,17 @@ def test_batched_reverse(export_file,lsc_model,precision,case,mesh,field,record_
     assert energies[1]==energies[2]
     np.testing.assert_array_equal(legacy.dipole,batch.dipole)
     np.testing.assert_array_equal(legacy.download_charges()['partial_charges'],batch.download_charges()['partial_charges'])
-    forces=batch.download_forces()['forces'];expected=np.asarray(native.forces).reshape(-1,3)
+    result=batch.download_forces();original=legacy.download_forces()
+    forces=result['forces'];expected=np.asarray(native.forces).reshape(-1,3)
+    # Independent mesh reductions can differ at FP64 roundoff. Use the same
+    # absolute tolerance as the existing double-precision force assembly check.
+    np.testing.assert_allclose(result['position_forces'],original['position_forces'],atol=2e-12,rtol=0)
+    # The factorized reverse changes operation order, while the forward model is
+    # identical. Check both its edge derivatives and the assembled observables.
+    np.testing.assert_allclose(result['edge_forces'],original['edge_forces'],atol=8e-5,rtol=1e-4)
+    np.testing.assert_allclose(forces,original['forces'],atol=8e-5,rtol=1e-4)
+    np.testing.assert_allclose(batch.stress,legacy.stress,atol=5e-7,rtol=1e-4)
+    np.testing.assert_allclose(batch.virial,legacy.virial,atol=1e-3,rtol=1e-4)
     np.testing.assert_allclose(forces,expected,atol=8e-5,rtol=1e-4)
     np.testing.assert_allclose(batch.stress,native.stress,atol=5e-7,rtol=1e-4)
     assert abs(energies[2]-energies[0])/len(load_atoms(case))<1e-6

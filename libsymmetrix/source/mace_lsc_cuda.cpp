@@ -54,6 +54,9 @@ LSCCudaArray host_array(const LSCCudaArray& metadata)
 } // namespace
 
 struct MACELSCCuda::DeviceData {
+    bool owned_device_graph=false;
+    std::array<bool,2> source_scalar_couplings{};
+    std::array<bool,2> owned_available{},owned_complete{};
     std::optional<LSCGraph> graph;
     int local_stage=0,reverse_stage=0,sender_nodes=0;
     LSCForwardState forward;
@@ -237,6 +240,12 @@ MACELSCCuda::MACELSCCuda(const std::string& filename,const std::string& selected
     for(int i=0;i<9;++i)ep.displacements[i]=scalar("electrostatics.realspace.offset_vectors",i);
     ep.include_self=std::get<std::vector<std::int32_t>>(parameters.arrays.at("electrostatics.include_self_interaction").values).at(0)!=0;
     device->electrostatic_cutoff=scalar("electrostatics.kspace_cutoff");
+    // Specialize indices only. Coefficients remain those in the exported model.
+    const std::array<std::int32_t,16> source_spec={0,0,0,0,0,128,1,128,0,256,2,128,0,384,3,128};
+    for(int t=0;t<2;++t){
+        const auto& spec=std::get<std::vector<std::int32_t>>(parameters.arrays.at("sources."+std::to_string(t)+".conv_tp.spec").values);
+        device->source_scalar_couplings[t]=std::equal(spec.begin(),spec.end(),source_spec.begin(),source_spec.end());
+    }
     check(cudaStreamCreateWithFlags(&device->stream,cudaStreamNonBlocking),"create stream");
     check(cublasCreate(&device->blas),"create cuBLAS handle");
     check(cublasSetStream(device->blas,device->stream),"set cuBLAS stream");
@@ -283,15 +292,16 @@ void MACELSCCuda::compute_geometry(std::span<const int> types,std::span<const in
     device->graph=LSCGraph(types,senders,receivers,vectors);device->forward.reset(*device->graph);
 }
 void MACELSCCuda::prepare_geometry(std::span<const int> types,std::span<const int> senders,
-    std::span<const int> receivers,std::span<const double> vectors,int sender_nodes)
+    std::span<const int> receivers,std::span<const double> vectors,int sender_nodes,bool device_inputs)
 {
     device->active();
+    device->owned_device_graph=device_inputs;device->owned_available={};device->owned_complete={};
     device->graph.reset();device->local_stage=0;device->forward=LSCForwardState{};device->sender_nodes=sender_nodes;
     clear_charge_results();
     has_geometry=false;has_spline_results=false;spline_name.clear();
     has_local_results=false;local_energy=0;
     device->local_metadata.clear();device->local_layouts.clear();
-    device->sgemm_count=0;device->tensor_core_gemm_count=0;batched_reverse_calls=0;
+    device->sgemm_count=0;device->tensor_core_gemm_count=0;batched_reverse_calls=0;batched_source_reverse_calls=0;batched_source_forward_calls=0;
     device->geometry_metadata.clear();device->spline_metadata.clear();num_nodes=0;num_edges=0;
     if(types.size()>size_t(std::numeric_limits<int>::max()-1) or senders.size()>size_t(std::numeric_limits<int>::max())
        or senders.size()!=receivers.size() or vectors.size()!=3*senders.size())
@@ -301,7 +311,8 @@ void MACELSCCuda::prepare_geometry(std::span<const int> types,std::span<const in
     auto upload=[&](const std::string& name,const auto& input){
         using T=typename std::decay_t<decltype(input)>::value_type;
         auto ptr=device->buffer<T>(name,input.size());
-        if(input.size())check(cudaMemcpyAsync(ptr,input.data(),input.size_bytes(),cudaMemcpyHostToDevice,stream),"upload graph input");
+        if(input.size())check(cudaMemcpyAsync(ptr,input.data(),input.size_bytes(),
+            device_inputs?cudaMemcpyDeviceToDevice:cudaMemcpyHostToDevice,stream),"copy graph input");
         return ptr;
     };
     auto dt=upload("node_types",types);auto ds=upload("senders",senders);auto dr=upload("receivers",receivers);
@@ -438,10 +449,11 @@ void MACELSCCuda::compute_first_layer()
 
     device->active();clear_charge_results();has_local_results=false;local_energy=0;device->local_stage=0;
     device->local_metadata.clear();device->local_layouts.clear();
-    device->sgemm_count=0;device->tensor_core_gemm_count=0;batched_reverse_calls=0;
+    device->sgemm_count=0;device->tensor_core_gemm_count=0;batched_reverse_calls=0;batched_source_reverse_calls=0;batched_source_forward_calls=0;
     if(not has_geometry)throw std::runtime_error("MACELSCCuda: compute geometry first");
     const int N=num_nodes,C=num_channels,M=device->sender_nodes;
-    device->forward.reset(graph_layout());
+    if(device->owned_device_graph){device->owned_available={};device->owned_complete={};}
+    else device->forward.reset(graph_layout());
     if(M>std::numeric_limits<int>::max()/7)
         throw std::invalid_argument("MACELSCCuda: excessive local linear row count");
     const size_t nn=N;const auto stream=device->stream;
@@ -631,15 +643,26 @@ std::array<double,3> MACELSCCuda::compute_charges(std::span<const int> types,std
 
 std::array<double,3> MACELSCCuda::evaluate_charges(std::span<const double> positions)
 {
-    device->active();clear_charge_results();
+    return evaluate_charge_inputs(positions,false);
+}
+std::array<double,3> MACELSCCuda::evaluate_charges_device(const double* positions)
+{
+    if(!device->owned_device_graph)throw std::runtime_error("MACELSCCuda: prepare the one-rank device graph first");
+    if(num_nodes && !positions)throw std::invalid_argument("MACELSCCuda: missing device positions");
+    return evaluate_charge_inputs({positions,size_t(num_nodes)*3},true);
+}
+std::array<double,3> MACELSCCuda::evaluate_charge_inputs(std::span<const double> positions,bool device_inputs)
+{
+    device->active();clear_charge_results();batched_source_forward_calls=0;
     if(not has_local_results)throw std::runtime_error("MACELSCCuda: evaluate local interactions first");
-    if(graph_layout().uses_remote_ghosts())throw std::runtime_error("MACELSCCuda: remote charge accumulation requires the staged MPI source API; reverse communication is not implemented yet");
+    if(!device->owned_device_graph && graph_layout().uses_remote_ghosts())throw std::runtime_error("MACELSCCuda: remote charge accumulation requires the staged MPI source API; reverse communication is not implemented yet");
     const int N=num_nodes,E=num_edges,C=num_channels;
     const size_t nn=N,ne=E,stride=std::max(nn,ne);
     if(positions.size()!=3*nn)throw std::invalid_argument("MACELSCCuda: expected positions[N,3]");
     const auto stream=device->stream;const bool mixed=float32_mixed and tensor_cores;
     auto coords=device->buffer<double>("positions",3*nn);
-    if(nn)check(cudaMemcpyAsync(coords,positions.data(),positions.size_bytes(),cudaMemcpyHostToDevice,stream),"upload source positions");
+    if(nn)check(cudaMemcpyAsync(coords,positions.data(),positions.size_bytes(),
+        device_inputs?cudaMemcpyDeviceToDevice:cudaMemcpyHostToDevice,stream),"copy source positions");
     auto error=device->buffer<int>("source_error",1);
     check(cudaMemsetAsync(error,0,sizeof(int),stream),"clear source status");
     if(nn)lsc_cuda::validate_source_positions<<<(3*nn+255)/256,256,0,stream>>>(3*nn,coords,error);
@@ -684,13 +707,25 @@ std::array<double,3> MACELSCCuda::evaluate_charges(std::span<const double> posit
             device->linear(prefix+".linear1",N,output,sender,mixed);
             device->linear(prefix+".linear2",N,output,receiver,mixed);
             if(E){
-                lsc_cuda::source_flux<<<E,C,0,stream>>>(N,device->working<int>("senders"),device->working<int>("receivers"),
-                    device->working<float>("spherical_harmonics"),device->working<int>("intervals"),device->working<float>("spline_coordinate"),
-                    device->parameter<float>(prefix+".radial.coefficients"),device->parameter<int>(prefix+".conv_tp.spec"),
-                    device->parameter<float>(prefix+".conv_tp.coefficients"),device->metadata.at(prefix+".conv_tp.spec").shape[0],
-                    sender,receiver,device->parameter<float>(prefix+".transfer_readout.weights.0"),
-                    device->parameter<float>(prefix+".transfer_readout.bias"),device->parameter<float>(prefix+".transfer_scale"),
-                    (ne?layer_flux+size_t(t)*ne:layer_flux),error);
+                if(use_batched_source_forward && device->source_scalar_couplings[t]){
+                    lsc_cuda::source_flux_batched<4><<<dim3(N,4),C,0,stream>>>(N,
+                        device->working<int>("incoming_starts"),device->working<int>("incoming_edges"),device->working<int>("senders"),
+                        device->working<float>("spherical_harmonics"),device->working<int>("intervals"),device->working<float>("spline_coordinate"),
+                        device->parameter<float>(prefix+".radial.coefficients"),
+                        device->parameter<float>(prefix+".conv_tp.coefficients"),
+                        sender,receiver,device->parameter<float>(prefix+".transfer_readout.weights.0"),
+                        device->parameter<float>(prefix+".transfer_readout.bias"),device->parameter<float>(prefix+".transfer_scale"),
+                        (ne?layer_flux+size_t(t)*ne:layer_flux),error);
+                    ++batched_source_forward_calls;
+                }else {
+                    lsc_cuda::source_flux<<<E,C,0,stream>>>(N,device->working<int>("senders"),device->working<int>("receivers"),
+                        device->working<float>("spherical_harmonics"),device->working<int>("intervals"),device->working<float>("spline_coordinate"),
+                        device->parameter<float>(prefix+".radial.coefficients"),device->parameter<int>(prefix+".conv_tp.spec"),
+                        device->parameter<float>(prefix+".conv_tp.coefficients"),device->metadata.at(prefix+".conv_tp.spec").shape[0],
+                        sender,receiver,device->parameter<float>(prefix+".transfer_readout.weights.0"),
+                        device->parameter<float>(prefix+".transfer_readout.bias"),device->parameter<float>(prefix+".transfer_scale"),
+                        (ne?layer_flux+size_t(t)*ne:layer_flux),error);
+                }
                 check(cudaGetLastError(),"evaluate fused directed source transfers");
             }
             device->linear(prefix+".multipoles",N,output,multipoles,mixed);
@@ -947,7 +982,16 @@ void MACELSCCuda::reverse_charges()
             const auto prefix="sources."+std::to_string(t);
             for(auto ptr:{sf_adj,sender_adj,receiver_adj})check(cudaMemsetAsync(ptr,0,nn*4*C*sizeof(float),stream),"clear source adjoints");
             device->linear_reverse(prefix+".multipoles",N,multipole_adj,sf_adj,mixed);
-            if(E)lsc_cuda::source_transfer_reverse<<<E,C,0,stream>>>(N,device->working<int>("senders"),device->working<int>("receivers"),device->working<float4>("geometry"),
+            if(E && use_batched_source_reverse && device->source_scalar_couplings[t]){
+                lsc_cuda::source_transfer_reverse_batched<4><<<dim3(N,4),C,0,stream>>>(N,device->working<int>("incoming_starts"),device->working<int>("incoming_edges"),device->working<int>("senders"),device->working<float4>("geometry"),
+                device->working<float>("spherical_harmonics"),device->working<float>("spherical_harmonics_gradient"),device->working<int>("intervals"),device->working<float>("spline_coordinate"),
+                device->parameter<float>(prefix+".radial.coefficients"),device->parameter<float>(prefix+".radial.grid"),
+                device->parameter<float>(prefix+".conv_tp.coefficients"),device->parameter<float>(prefix+".transfer_readout.weights.0"),
+                device->parameter<float>(prefix+".transfer_scale"),device->working<float>("source_sender")+size_t(t)*nn*4*C,device->working<float>("source_receiver")+size_t(t)*nn*4*C,
+                density_adj,field[0],field[1],field[2],device->working<double>("edge_vectors"),sender_adj,receiver_adj,edge_adj);
+                ++batched_source_reverse_calls;
+            }
+            else if(E)lsc_cuda::source_transfer_reverse<<<E,C,0,stream>>>(N,device->working<int>("senders"),device->working<int>("receivers"),device->working<float4>("geometry"),
                 device->working<float>("spherical_harmonics"),device->working<float>("spherical_harmonics_gradient"),device->working<int>("intervals"),device->working<float>("spline_coordinate"),
                 device->parameter<float>(prefix+".radial.coefficients"),device->parameter<float>(prefix+".radial.grid"),device->parameter<int>(prefix+".conv_tp.spec"),
                 device->parameter<float>(prefix+".conv_tp.coefficients"),device->metadata.at(prefix+".conv_tp.spec").shape[0],device->parameter<float>(prefix+".transfer_readout.weights.0"),
@@ -1066,6 +1110,38 @@ std::map<std::string,LSCCudaArray> MACELSCCuda::download_forces(bool diagnostics
     if(diagnostics)return device->download(device->force_metadata);
     std::map<std::string,LSCCudaArray> info{{"forces",device->force_metadata.at("forces")}};return device->download(info);
 }
+const double* MACELSCCuda::forces_device() const
+{
+    device->active();
+    if(!has_force_results || !device->owned_device_graph)
+        throw std::runtime_error("MACELSCCuda: evaluate device-graph forces first");
+    return device->working<double>("forces");
+}
+const double* MACELSCCuda::partial_charges_device() const
+{
+    device->active();
+    if(!has_charge_results || !device->owned_device_graph)
+        throw std::runtime_error("MACELSCCuda: evaluate device-graph charges first");
+    return device->working<double>("partial_charges");
+}
+const double* MACELSCCuda::node_energies_device()
+{
+    forces_device();
+    auto out=device->buffer<double>("node_energy_partition",num_nodes);
+    const auto field=device->energy_field;const auto stream=device->stream;
+    if(num_nodes)lsc_cuda::node_energy_partition<<<(num_nodes+255LL)/256,256,0,stream>>>(num_nodes,
+        device->working<int>("node_types"),device->parameter<float>("formal_charges"),
+        device->working<double>("positions"),device->working<double>("local_node_energies"),
+        device->working<double>("density_coefficients"),device->working<double>("density_energy_gradient"),
+        field[0],field[1],field[2],out);
+    if(num_edges && (field[0]!=0 || field[1]!=0 || field[2]!=0))
+        lsc_cuda::edge_energy_partition<<<(num_edges+255LL)/256,256,0,stream>>>(num_edges,
+            device->working<int>("senders"),device->working<int>("receivers"),device->working<double>("edge_fluxes"),
+            device->working<double>("edge_vectors"),field[0],field[1],field[2],out);
+    check(cudaGetLastError(),"partition device node energies");
+    check(cudaStreamSynchronize(stream),"complete device node energy output");
+    return out;
+}
 
 void MACELSCCuda::prepare_graph(const LSCGraph& input)
 {
@@ -1086,6 +1162,14 @@ void MACELSCCuda::prepare_graph(const LSCGraph& input)
         check(cudaStreamSynchronize(device->stream),"complete local ghost owner upload");
     }
     device->graph=std::move(graph);device->forward.reset(*device->graph);
+}
+void MACELSCCuda::prepare_graph_device(int nodes,int edges,const int* types,
+    const int* senders,const int* receivers,const double* vectors)
+{
+    if(nodes<0 || edges<0 || (nodes && !types) || (edges && (!senders || !receivers || !vectors)))
+        throw std::invalid_argument("MACELSCCuda: invalid one-rank device graph buffers");
+    prepare_geometry({types,size_t(nodes)},{senders,size_t(edges)},{receivers,size_t(edges)},
+        {vectors,size_t(edges)*3},nodes,true);
 }
 const LSCGraph& MACELSCCuda::graph_layout()const
 {
@@ -1123,6 +1207,7 @@ LSCCudaArray MACELSCCuda::download_layer_features(int layer,bool gradients)
 
 void MACELSCCuda::publish_forward_features(int layer)
 {
+    if(device->owned_device_graph){device->owned_available.at(layer-1)=true;return;}
     const auto& graph=graph_layout();const int all=graph.num_nodes(),C=num_channels;
     if(graph.num_ghosts()){
         auto owners=device->working<int>("forward_owners");
@@ -1134,6 +1219,12 @@ void MACELSCCuda::publish_forward_features(int layer)
 }
 float* MACELSCCuda::forward_features_device(int layer) const
 {
+    if(device->owned_device_graph){
+        device->active();
+        if((layer!=1 && layer!=2) || !device->owned_available[layer-1])
+            throw std::runtime_error("MACELSCCuda: requested device features are not ready");
+        return device->working<float>("H"+std::to_string(layer));
+    }
     device->active();device->forward.check_available(layer);
     return device->working<float>("H"+std::to_string(layer)+(graph_layout().num_ghosts()?"_halo":""));
 }
@@ -1164,9 +1255,20 @@ void MACELSCCuda::unpack_forward_features(int layer,int first,std::span<const do
 }
 void MACELSCCuda::complete_forward_exchange(int layer)
 {
+    if(device->owned_device_graph){
+        if((layer!=1 && layer!=2) || !device->owned_available[layer-1])
+            throw std::runtime_error("MACELSCCuda: compute this layer before completing device features");
+        device->owned_complete[layer-1]=true;return;
+    }
     device->forward.complete(layer,graph_layout());
 }
-bool MACELSCCuda::forward_exchange_complete(int layer) const{return device->forward.complete(layer);}
+bool MACELSCCuda::forward_exchange_complete(int layer) const{
+    if(device->owned_device_graph){
+        if(layer!=1 && layer!=2)throw std::invalid_argument("MACELSCCuda: expected layer 1 or 2");
+        return device->owned_complete[layer-1];
+    }
+    return device->forward.complete(layer);
+}
 LSCCudaArray MACELSCCuda::download_forward_features(int layer) const
 {
     auto ptr=forward_features_device(layer);const size_t N=graph_layout().num_nodes(),C=num_channels;
@@ -1183,7 +1285,7 @@ void MACELSCCuda::compute_partial_charges(std::span<const double> positions)
     device->active();if(!has_local_results)throw std::runtime_error("MACELSCCuda: compute readouts before partial charges");
     const auto& graph=graph_layout();const int N=num_nodes,M=graph.num_nodes(),E=num_edges,C=num_channels;
     if(positions.size()!=size_t(N)*3)throw std::invalid_argument("MACELSCCuda: expected owned positions[N_owned,3]");
-    LSCChargeExchange::finite(positions);clear_charge_results();
+    LSCChargeExchange::finite(positions);clear_charge_results();batched_source_forward_calls=0;
     const auto stream=device->stream;const size_t mm=M,nn=N,ne=E;
     if(!graph.uses_remote_ghosts()){
         evaluate_charges(positions);device->charge_legacy=true;

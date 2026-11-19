@@ -84,6 +84,74 @@ __global__ void source_transfer_reverse(int N,const int* senders,const int* rece
     add_edge_gradient(e,gradient,edge_adj);
 }
 
+// Polar/foundation receiver batches, split for enough parallelism with 128
+// channels. The loader verifies the four scalar coupling indices before using
+// this specialization; exported CG coefficients and learned splines stay runtime data.
+template<int Splits>
+__global__ void source_transfer_reverse_batched(int N,const int* starts,const int* order,
+    const int* senders,const float4* geometry,const float* Y,const float* Y_grad,
+    const int* intervals,const float* coordinate,const float* radial,const float* grid,
+    const float* coefficients,const float* readout,const float* scale,
+    const float* sender_features,const float* receiver_features,const double* density_adj,
+    double fx,double fy,double fz,const double* vectors,float* sender_adj,float* receiver_adj,double* edge_adj)
+{
+    constexpr int C=local_channels,F=2*C,Batch=32;
+    struct Edge {float y[4],dy[12],t,seed;float4 geometry;int e,s,k;};
+    __shared__ Edge staged[Batch];
+    const int r=blockIdx.x,u=threadIdx.x;
+    const int first_edge=starts[r],edges=starts[r+1]-first_edge;
+    const int begin=first_edge+int((long long)edges*blockIdx.y/Splits);
+    const int end=first_edge+int((long long)edges*(blockIdx.y+1)/Splits);
+    float receiver[4],receiver_gradient[4]={},cg[4];
+    #pragma unroll
+    for(int lm=0;lm<4;++lm){receiver[lm]=receiver_features[local_row(lm,r,N)*C+u];cg[lm]=coefficients[lm];}
+    const float weight=readout[u];
+    for(int first=begin;first<end;first+=Batch){
+        const int count=min(Batch,end-first);
+        __syncthreads();
+        if(u<count){
+            const int e=order[first+u];auto& q=staged[u];
+            q.e=e;q.s=senders[e];q.k=intervals[e];q.t=coordinate[e];q.geometry=geometry[e];
+            const double field=fx*vectors[size_t(e)*3]+fy*vectors[size_t(e)*3+1]+fz*vectors[size_t(e)*3+2];
+            q.seed=float(double(scale[0])*(density_adj[size_t(r)*4]-density_adj[size_t(q.s)*4]+field));
+            #pragma unroll
+            for(int m=0;m<4;++m){
+                q.y[m]=Y[size_t(e)*16+m];
+                for(int d=0;d<3;++d)q.dy[d*4+m]=Y_grad[(size_t(e)*3+d)*16+m];
+            }
+        }
+        __syncthreads();
+        for(int j=0;j<count;++j){
+            const auto& q=staged[j];float R[2],dR[2];
+            #pragma unroll
+            for(int p=0;p<2;++p){cubic(radial+size_t(q.k)*4*F,F,p*C+u,q.t,R[p],dR[p]);dR[p]*=grid[2];}
+            const float upstream=q.seed*weight;float dr=0,gy[4];
+            static_for<4>([&](auto index){
+                constexpr int lm=index,p=lm>0;
+                const float g=upstream*cg[lm],angular=q.y[lm];
+                const size_t si=local_row(lm,q.s,N)*C+u;
+                const float value=sender_features[si]+receiver[lm],feature_adj=g*angular*R[p];
+                atomicAdd(sender_adj+si,feature_adj);receiver_gradient[lm]+=feature_adj;
+                dr+=g*angular*value*dR[p];gy[lm]=g*value*R[p];
+            });
+            const float unit[3]={q.geometry.x,q.geometry.y,q.geometry.z};float gradient[3];
+            #pragma unroll
+            for(int d=0;d<3;++d){
+                gradient[d]=dr*unit[d];
+                #pragma unroll
+                for(int m=0;m<4;++m)gradient[d]+=gy[m]*q.dy[d*4+m];
+            }
+            add_edge_gradient(q.e,gradient,edge_adj);
+            // All four warps finish the shared edge reduction before reuse.
+            __syncthreads();
+        }
+    }
+    // Four neighbor partitions share a receiver; reduce once per partition,
+    // rather than once per edge, while keeping sender updates atomic.
+    #pragma unroll
+    for(int lm=0;lm<4;++lm)atomicAdd(receiver_adj+local_row(lm,r,N)*C+u,receiver_gradient[lm]);
+}
+
 template<int Layer,bool Mixed,bool Ghosts=false>
 __global__ void local_convolution_reverse(int N,const int* senders,const int* receivers,const float4* geometry,
     const float* Y,const float* Y_grad,const int* intervals,const float* coordinate,const float* radial,const __half2* radial_half,
@@ -111,9 +179,41 @@ __global__ void local_convolution_reverse(int N,const int* senders,const int* re
     if constexpr(Layer>0)for(int lm=0;lm<4;++lm)atomicAdd(up_adj+local_row(lm,s,all)*C+c,gH[lm]);
 }
 
-// Polar's receiver-batched Phi1 reverse pattern. LSC keeps its exported CG
-// coefficients and the original four-warp edge reduction. Only the order of
-// atomic sender-feature additions can differ from the legacy edge launch.
+// Foundation's tp_reverse factors terms by (path, input component, harmonic).
+// The index groups are compile-time data; LSC's exported coefficients remain
+// runtime data and already contain the required spherical-harmonic normalization.
+template<class Conv> constexpr bool local_reverse_first_term(int q)
+{
+    const Term t=Conv::terms[q];
+    for(int i=0;i<q;++i){const Term u=Conv::terms[i];
+        if(u.path==t.path and u.lm2==t.lm2 and u.lm1==t.lm1)return false;}
+    return true;
+}
+template<class Conv> constexpr int local_reverse_next_term(int q)
+{
+    const Term t=Conv::terms[q];
+    for(int i=q+1;i<Conv::count;++i){const Term u=Conv::terms[i];
+        if(u.path==t.path and u.lm2==t.lm2 and u.lm1==t.lm1)return i;}
+    return -1;
+}
+template<class Conv> constexpr bool local_reverse_has_input(int path,int lm2)
+{
+    for(const Term& t:Conv::terms)if(t.path==path and t.lm2==lm2)return true;
+    return false;
+}
+template<class Conv,int Q>
+__device__ __forceinline__ float local_reverse_weight(const float* coefficients,const float* adj)
+{
+    constexpr Term t=Conv::terms[Q];
+    constexpr int next=local_reverse_next_term<Conv>(Q);
+    const float w=coefficients[Q]*adj[t.lme];
+    if constexpr(next<0)return w;
+    else return w+local_reverse_weight<Conv,next>(coefficients,adj);
+}
+
+// Polar's receiver batching with foundation's factorized tensor-product reverse.
+// Stream one radial path at a time to avoid keeping R, dR and gR arrays live.
+// Preserve the four-warp edge reduction and atomic sender-feature updates.
 template<bool Mixed,bool Ghosts=false>
 __global__ void __launch_bounds__(local_channels,3) local_convolution_reverse_batched(
     int N,int M,const int* starts,const int* order,const int* senders,
@@ -139,17 +239,29 @@ __global__ void __launch_bounds__(local_channels,3) local_convolution_reverse_ba
         }
         __syncthreads();
         for(int j=0;j<count;++j){
-            const auto& q=staged[j];float R[Conv::paths],dR[Conv::paths],gR[Conv::paths]={},gY[16]={},gH[4]={},h[4];
+            const auto& q=staged[j];float gY[16]={},gH[4]={},h[4],radial_adj=0;
             for(int lm=0;lm<4;++lm)h[lm]=up[local_row(lm,q.s,all)*C+c];
-            for(int p=0;p<Conv::paths;++p){
-                if constexpr(Mixed)cubic(radial+size_t(q.k)*2*F,radial_half+size_t(q.k)*F,F,p*C+c,q.t,R[p],dR[p]);
-                else cubic(radial+size_t(q.k)*4*F,F,p*C+c,q.t,R[p],dR[p]);
-            }
-            static_for<Conv::count>([&](auto index){
-                constexpr Term t=Conv::terms[index];const float g=coefficients[index]*adj[t.lme],y=q.y[t.lm1];
-                gR[t.path]+=g*y*h[t.lm2];gY[t.lm1]+=g*R[t.path]*h[t.lm2];gH[t.lm2]+=g*y*R[t.path];
+            static_for<Conv::paths>([&](auto path){
+                constexpr int P=path;float R,dR,gR=0;
+                if constexpr(Mixed)cubic(radial+size_t(q.k)*2*F,radial_half+size_t(q.k)*F,F,P*C+c,q.t,R,dR);
+                else cubic(radial+size_t(q.k)*4*F,F,P*C+c,q.t,R,dR);
+                static_for<4>([&](auto component){
+                    constexpr int LM=component;
+                    if constexpr(local_reverse_has_input<Conv>(P,LM)){
+                        const float rh=R*h[LM];float s=0;
+                        static_for<Conv::count>([&](auto index){
+                            constexpr Term t=Conv::terms[index];
+                            if constexpr(t.path==P and t.lm2==LM and local_reverse_first_term<Conv>(index)){
+                                const float w=local_reverse_weight<Conv,index>(coefficients,adj);
+                                s+=w*q.y[t.lm1];gY[t.lm1]+=w*rh;
+                            }
+                        });
+                        gH[LM]+=R*s;gR+=h[LM]*s;
+                    }
+                });
+                radial_adj+=dR*gR;
             });
-            float radial_adj=0;for(int p=0;p<Conv::paths;++p)radial_adj+=dR[p]*gR[p];radial_adj*=grid[2];
+            radial_adj*=grid[2];
             const float unit[3]={q.geometry.x,q.geometry.y,q.geometry.z};float gradient[3];
             for(int d=0;d<3;++d){gradient[d]=radial_adj*unit[d];for(int m=0;m<16;++m)gradient[d]+=gY[m]*q.dy[d*16+m];}
             add_edge_gradient(q.e,gradient,edge_adj);
@@ -192,5 +304,30 @@ __global__ void reverse_force_edges(int N,int E,const double* vectors,const doub
     const int e=blockIdx.x*blockDim.x+threadIdx.x;if(e>=E)return;
     for(int d=0;d<3;++d){forces[size_t(e)*3+d]=-adj[size_t(e)*3+d];
         for(int a=0;a<3;++a)terms[size_t(3*a+d)*stride+N+e]=vectors[size_t(e)*3+a]*adj[size_t(e)*3+d];}
+}
+// The same per-atom partition used by the host LSC pair. Keep its optional
+// output on-device; ordinary global-energy MD does not launch these kernels.
+__global__ void node_energy_partition(int N,const int* types,const float* formal,
+    const double* positions,const double* local,const double* rho,const double* gradient,
+    double fx,double fy,double fz,double* energies)
+{
+    const int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=N)return;
+    const double field[3]={fx,fy,fz};constexpr int cartesian[3]={3,1,2};
+    double value=local[i];
+    for(int lm=0;lm<4;++lm){
+        double g=gradient[size_t(i)*4+lm];
+        if(lm>0)g-=field[lm==1?1:(lm==2?2:0)];
+        value+=0.5*rho[size_t(i)*4+lm]*g;
+    }
+    for(int d=0;d<3;++d)value+=field[d]*(double(formal[types[i]])*positions[size_t(i)*3+d]
+        +rho[size_t(i)*4+cartesian[d]]);
+    energies[i]=value;
+}
+__global__ void edge_energy_partition(int E,const int* senders,const int* receivers,
+    const double* flux,const double* vectors,double fx,double fy,double fz,double* energies)
+{
+    const int e=blockIdx.x*blockDim.x+threadIdx.x;if(e>=E)return;
+    const double value=0.5*flux[e]*(fx*vectors[size_t(e)*3]+fy*vectors[size_t(e)*3+1]+fz*vectors[size_t(e)*3+2]);
+    atomicAdd(energies+senders[e],value);atomicAdd(energies+receivers[e],value);
 }
 } // namespace lsc_cuda

@@ -23,6 +23,8 @@ def test_install_repeat_and_lsc_sources(tmp_path):
     assert 'CUDA::cudart' in text
     for name in ['pair_symmetrix_mace_lsc.cpp', 'pair_symmetrix_mace_lsc.h', 'pair_symmetrix_mace_lsc_mesh.cpp', 'pair_symmetrix_mace_lsc_mesh.h']:
         assert (root/'src'/name).resolve() == REPO/'pair_symmetrix'/name
+    for name in ['pair_symmetrix_mace_lsc_kokkos.cpp', 'pair_symmetrix_mace_lsc_kokkos.h']:
+        assert (root/'src/KOKKOS'/name).resolve() == REPO/'pair_symmetrix'/name
     assert install(root).returncode == 0
     assert text == (root/'cmake/CMakeLists.txt').read_text()
 

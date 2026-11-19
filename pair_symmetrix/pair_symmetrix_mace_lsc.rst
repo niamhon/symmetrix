@@ -4,6 +4,9 @@ pair_style symmetrix/mace/lsc command
 pair_style symmetrix/mace/lsc/cuda command
 ========================================
 
+pair_style symmetrix/mace/lsc/cuda/kk command
+===========================================
+
 .. versionadded:: TBD
 
 Syntax
@@ -15,6 +18,7 @@ Syntax
    pair_style symmetrix/mace/lsc mesh spacing [order P] [field Ex Ey Ez]
    pair_style symmetrix/mace/lsc/cuda direct [float32-mixed] [field Ex Ey Ez]
    pair_style symmetrix/mace/lsc/cuda mesh spacing [order P] [float32-mixed] [field Ex Ey Ez]
+   pair_style symmetrix/mace/lsc/cuda/kk mesh spacing [order P] [float32-mixed] [field Ex Ey Ez]
    pair_coeff * * model.json element1 element2 ...
 
 * ``direct`` selects the complete-system reference evaluator (one MPI process).
@@ -94,9 +98,31 @@ Fourier remaps use host-staged MPI transfers. Each process uses the CUDA device
 visible to it. Assign devices through the job launcher for multi-GPU runs;
 validation on two processes sharing one GPU does not establish multi-GPU scaling.
 
-The CUDA style requires a CUDA-enabled libsymmetrix build. It invokes CUDA
-directly and does not use a ``/kk`` suffix. Models outside the validated LSC
+For multiple MPI processes, retain the original ``/cuda`` pair and launcher
+without ``-sf kk``, which would otherwise select the one-process Kokkos variant.
+
+The CUDA styles require a CUDA-enabled libsymmetrix build. The plain ``/cuda``
+style also supports the staged MPI interface described above. The optional
+``/cuda/kk`` style requires CUDA Kokkos and currently runs on one MPI process.
+It uses the same model, local kernels and electrostatics; graph construction,
+periodic-image mapping, forces and predicted charges stay on the GPU. It
+supports both ``direct`` and ``mesh`` settings, clusters and periodic boxes,
+global virial, dipoles and per-atom energies. It requires
+``atom_modify map yes``, ``array`` or ``hash``. Models outside the validated LSC
 architecture family are rejected.
+
+.. versionadded:: TBD
+
+Use the Kokkos launcher like Polar, for example::
+
+   mpirun -np 1 lmp -k on g 1 -sf kk -pk kokkos newton on neigh half -in in.lammps
+
+With ``-sf kk``, the existing ``pair_style symmetrix/mace/lsc/cuda`` command
+selects the new device path automatically when it is built. Use the full
+``symmetrix/mace/lsc/cuda/kk`` name for ``compute pair`` when selecting it
+explicitly. Candidate neighbors are filtered at the physical cutoff every
+force evaluation, including steps that reuse the LAMMPS neighbor list. Atom
+sorting is handled by mapping model rows to the current local atom slots.
 
 For one MPI process, local periodic ghost features are published by the native
 evaluator and no H1/H2 MPI transport or host feature readback is performed.

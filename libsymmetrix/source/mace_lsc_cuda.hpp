@@ -55,6 +55,12 @@ public:
     // Receiver batches reuse message derivatives and shared edge geometry.
     bool use_batched_reverse = false;
     size_t batched_reverse_calls = 0;
+    // One-rank source reverse batches reuse receiver features and avoid their atomics.
+    bool use_batched_source_reverse = false;
+    size_t batched_source_reverse_calls = 0;
+    // One-rank scalar-source forward; generic instructions retain their path.
+    bool use_batched_source_forward = false;
+    size_t batched_source_forward_calls = 0;
     size_t device_parameter_bytes = 0;
     std::map<std::string, LSCCudaArray> parameter_metadata() const;
     LSCCudaArray download_parameter(const std::string& name) const;
@@ -62,6 +68,15 @@ public:
     bool has_geometry = false, has_spline_results = false;
     std::string spline_name;
     void prepare_graph(const LSCGraph& graph);
+    // One-rank device input. Senders/receivers index owned nodes; periodic
+    // image displacements stay on edges. The caller finishes input writes
+    // before entering; inputs are copied on-device into evaluator storage.
+    void prepare_graph_device(int nodes,int edges,const int* types,
+        const int* senders,const int* receivers,const double* vectors);
+    std::array<double,3> evaluate_charges_device(const double* positions);
+    const double* forces_device() const;
+    const double* partial_charges_device() const;
+    const double* node_energies_device();
     const LSCGraph& graph_layout() const;
     std::string evaluation_stage() const;
     void pack_forward_features(int layer,std::span<const int> slots,std::span<double> values) const;
@@ -170,7 +185,8 @@ private:
     void evaluate_local_layer(int layer);
     void publish_forward_features(int layer);
     void prepare_geometry(std::span<const int> types,std::span<const int> senders,
-        std::span<const int> receivers,std::span<const double> vectors,int sender_nodes);
+        std::span<const int> receivers,std::span<const double> vectors,int sender_nodes,bool device_inputs=false);
+    std::array<double,3> evaluate_charge_inputs(std::span<const double> positions,bool device_inputs);
     void reverse_local_layer(int layer);
     void reverse_distributed_local_layer(int layer);
     void clear_force_results();

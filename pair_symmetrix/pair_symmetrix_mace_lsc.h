@@ -63,8 +63,9 @@ template <bool CUDA> class PairSymmetrixMACELSC : public Pair {
   double init_one(int, int) override;
   double memory_usage() override;
 
- private:
-  void allocate();
+ protected:
+  virtual void allocate();
+  virtual void request_neighbor_list();
   void configure_electrostatics();
   std::unique_ptr<LSCDistributedMesh> distributed_mesh;
   std::unique_ptr<MACELSC> cpu;

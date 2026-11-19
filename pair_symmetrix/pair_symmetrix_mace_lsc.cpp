@@ -50,6 +50,7 @@ template <bool CUDA> PairSymmetrixMACELSC<CUDA>::PairSymmetrixMACELSC(LAMMPS *lm
 
 template <bool CUDA> PairSymmetrixMACELSC<CUDA>::~PairSymmetrixMACELSC()
 {
+  if (copymode) return;
   delete[] pvector;
   if (allocated) {
     memory->destroy(setflag);
@@ -135,6 +136,8 @@ template <bool CUDA> void PairSymmetrixMACELSC<CUDA>::coeff(int narg, char **arg
     if constexpr (CUDA) {
       gpu = std::make_unique<MACELSCCuda>(arg[2], mixed ? "float32-mixed" : "float32");
       gpu->use_batched_reverse = true;
+      gpu->use_batched_source_reverse = true;
+      gpu->use_batched_source_forward = true;
       cutoff = gpu->r_cut;
     } else {
       cpu = std::make_unique<MACELSC>(arg[2]);
@@ -191,6 +194,11 @@ template <bool CUDA> void PairSymmetrixMACELSC<CUDA>::init_style()
   } else {
     if (!cpu) error->all(FLERR, "LSC pair_coeff must be set before running");
   }
+  request_neighbor_list();
+}
+
+template <bool CUDA> void PairSymmetrixMACELSC<CUDA>::request_neighbor_list()
+{
   neighbor->add_request(this, NeighConst::REQ_FULL);
 }
 

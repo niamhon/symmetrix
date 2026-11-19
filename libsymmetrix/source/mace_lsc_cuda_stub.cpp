@@ -11,6 +11,16 @@ MACELSCCuda::MACELSCCuda(const std::string&,const std::string& selected_precisio
     throw std::runtime_error("MACELSCCuda: CUDA support is not built; use the separate CUDA development environment");
 }
 MACELSCCuda::~MACELSCCuda()=default;
+void MACELSCCuda::prepare_graph_device(int,int,const int*,const int*,const int*,const double*)
+{throw std::runtime_error("MACELSCCuda: CUDA support is not built");}
+std::array<double,3> MACELSCCuda::evaluate_charges_device(const double*)
+{throw std::runtime_error("MACELSCCuda: CUDA support is not built");}
+const double* MACELSCCuda::forces_device()const
+{throw std::runtime_error("MACELSCCuda: CUDA support is not built");}
+const double* MACELSCCuda::partial_charges_device()const
+{throw std::runtime_error("MACELSCCuda: CUDA support is not built");}
+const double* MACELSCCuda::node_energies_device()
+{throw std::runtime_error("MACELSCCuda: CUDA support is not built");}
 std::map<std::string,LSCCudaArray> MACELSCCuda::parameter_metadata() const{return {};}
 LSCCudaArray MACELSCCuda::download_parameter(const std::string&) const
 {

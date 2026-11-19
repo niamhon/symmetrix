@@ -39,6 +39,22 @@ SM80 code/PTX and FP32 or mixed neural layers. Physical electrostatics and
 reductions use FP64. H100 runtime validation does not establish validation on
 A100/H200 or multiple GPUs.
 
+The standard CUDA/Kokkos source build also provides
+`symmetrix/mace/lsc/cuda/kk` for one MPI process, following Polar's device graph
+and physical-output path. Launch with `-k on g 1 -sf kk -pk kokkos newton on
+neigh half` and use `atom_modify map array`. It accepts the same direct/mesh,
+FP32/mixed and external-field settings as the original CUDA pair. The original
+pair remains the staged MPI path. The custom prebuilt LAMMPS integration below
+does not enable Kokkos; use the standard source build for this new pair.
+
+The device input API consumes owned node types, owned sender/receiver indices
+and physical receiver-minus-sender image vectors. Callers finish input writes
+before `prepare_graph_device`; the evaluator copies those arrays on-device and
+retains the existing geometry validation. Its device force and charge pointers
+are borrowed outputs valid until the next evaluation. No host `LSCGraph` or
+host feature-exchange scans are needed on this route. Optional per-atom energy
+partitioning is also performed on the GPU.
+
 The helpers use the existing Rusty environment paths. `build_lammps.sh` integrates
 a prebuilt native library, which makes iterative LSC work much quicker than
 rebuilding all LAMMPS/Kokkos sources. Rebuild the MPI diagnostic driver after
