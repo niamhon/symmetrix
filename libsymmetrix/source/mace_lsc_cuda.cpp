@@ -13,6 +13,7 @@
 #include "mace_lsc_cuda_electrostatics.cuh"
 #include "mace_lsc_cuda_gemm.cuh"
 #include "mace_lsc_cuda_reverse.cuh"
+#include "mace_lsc_cuda_compact.cuh"
 #include <algorithm>
 #include <bit>
 #include <type_traits>
@@ -54,6 +55,7 @@ LSCCudaArray host_array(const LSCCudaArray& metadata)
 } // namespace
 
 struct MACELSCCuda::DeviceData {
+    bool compact_first_active=false;
     bool owned_device_graph=false;
     std::array<bool,2> source_scalar_couplings{};
     std::array<bool,2> owned_available{},owned_complete{};
@@ -135,16 +137,16 @@ struct MACELSCCuda::DeviceData {
             ++sgemm_count;
         }
     }
-    void gemm_reverse(const std::string& weight,int m,int n,int k,const float* a,float* c,bool mixed) {
+    void gemm_reverse(const std::string& weight,int m,int n,int k,const float* a,float* c,bool mixed,float beta=1.f) {
         if(m==0 or n==0)return;
         if(mixed and k%16==0 and n%32==0 and reinterpret_cast<uintptr_t>(a)%16==0
            and reinterpret_cast<uintptr_t>(c)%8==0 and (m+127LL)/128*(n/32)>=4*num_sms){
             std::vector<lsc_cuda::GemmDesc> pending{{a,parameter<__half>(weight+".mixed.reverse_hi"),
-                parameter<__half>(weight+".mixed.reverse_lo"),c,m,n,k,k,n,0,matrix_shifts.at(weight),1.f,1.f}};
+                parameter<__half>(weight+".mixed.reverse_lo"),c,m,n,k,k,n,0,matrix_shifts.at(weight),1.f,beta}};
             lsc_cuda::gemm_batches(pending,num_sms,stream);check(cudaGetLastError(),"launch mixed reverse GEMM");++tensor_core_gemm_count;
         }else{
             const float one=1.f;
-            check(cublasSgemm(blas,CUBLAS_OP_T,CUBLAS_OP_N,n,m,k,&one,parameter<float>(weight),k,a,k,&one,c,n),"FP32 reverse linear map");
+            check(cublasSgemm(blas,CUBLAS_OP_T,CUBLAS_OP_N,n,m,k,&one,parameter<float>(weight),k,a,k,&beta,c,n),"FP32 reverse linear map");
             ++sgemm_count;
         }
     }
@@ -228,6 +230,7 @@ MACELSCCuda::MACELSCCuda(const std::string& filename,const std::string& selected
         }
     }
     num_elements=parameters.num_elements;num_channels=parameters.num_channels;
+    can_compact_first_layer=parameters.arrays.contains("compact_first.basis");
     num_interactions=parameters.num_interactions;num_knots=parameters.num_knots;
     r_cut=parameters.r_cut;r_min=parameters.r_min;atomic_numbers=parameters.atomic_numbers;
     auto scalar=[&](const std::string& name,size_t i=0){return double(std::get<std::vector<float>>(parameters.arrays.at(name).values).at(i));};
@@ -296,6 +299,7 @@ void MACELSCCuda::prepare_geometry(std::span<const int> types,std::span<const in
 {
     device->active();
     device->owned_device_graph=device_inputs;device->owned_available={};device->owned_complete={};
+    device->compact_first_active=false;compact_first_forward_calls=0;compact_first_reverse_calls=0;
     device->graph.reset();device->local_stage=0;device->forward=LSCForwardState{};device->sender_nodes=sender_nodes;
     clear_charge_results();
     has_geometry=false;has_spline_results=false;spline_name.clear();
@@ -444,12 +448,51 @@ double MACELSCCuda::evaluate_local()
 {
     compute_first_layer();compute_second_layer();return compute_readouts();
 }
+void MACELSCCuda::compact_first_forward()
+{
+    const int N=num_nodes,T=num_elements,C=num_channels,F=T*lsc_cuda::compact_basis;
+    const auto stream=device->stream;const size_t nn=N;
+    auto density=device->buffer<float>("compact_first_density",nn*16*F);
+    const auto types=device->working<int>(device->sender_nodes==N?"node_types":"node_types_all");
+    lsc_cuda::compact_first_density<<<dim3(N,T),lsc_cuda::compact_basis,0,stream>>>(N,T,
+        device->working<int>("incoming_starts"),device->working<int>("incoming_edges"),
+        device->working<int>("senders"),types,device->working<float>("spherical_harmonics"),
+        device->working<int>("intervals"),device->working<float>("spline_coordinate"),
+        device->parameter<float>("compact_first.basis"),device->parameter<float>("compact_first.cg"),density);
+    check(cudaGetLastError(),"compact first-layer neighbor density");++compact_first_forward_calls;
+    auto A=device->working<float>("A0");
+    for(int l=0;l<4;++l)device->gemm("compact_first.weights."+std::to_string(l),N*(2*l+1),C,F,
+        density+nn*l*l*F,A+nn*l*l*C,float32_mixed&&tensor_cores);
+    lsc_cuda::linear_bias<<<(nn*C+255)/256,256,0,stream>>>(nn*C,C,A,device->parameter<float>("linear_0.bias"));
+    check(cudaGetLastError(),"compact first-layer scalar bias");
+}
+void MACELSCCuda::compact_first_reverse(const float* a_adj)
+{
+    const int N=num_nodes,T=num_elements,C=num_channels,F=T*lsc_cuda::compact_basis;
+    const auto stream=device->stream;const size_t nn=N;
+    auto adj=device->buffer<float>("compact_first_density_adjoint",nn*16*F);
+    // Each angular block is fully overwritten. Existing reverse maps retain
+    // their accumulating beta=1 behavior; only this new buffer uses beta=0.
+    for(int l=0;l<4;++l)device->gemm_reverse("compact_first.weights."+std::to_string(l),N*(2*l+1),F,C,
+        a_adj+nn*l*l*C,adj+nn*l*l*F,float32_mixed&&tensor_cores,0.f);
+    const auto types=device->working<int>(device->sender_nodes==N?"node_types":"node_types_all");
+    lsc_cuda::compact_first_density_reverse<<<dim3(N,T),lsc_cuda::compact_basis,0,stream>>>(N,T,
+        device->working<int>("incoming_starts"),device->working<int>("incoming_edges"),
+        device->working<int>("senders"),types,device->working<float4>("geometry"),
+        device->working<float>("spherical_harmonics"),device->working<float>("spherical_harmonics_gradient"),
+        device->working<int>("intervals"),device->working<float>("spline_coordinate"),
+        device->parameter<float>("compact_first.basis"),device->parameter<float>("radial_0.grid"),
+        device->parameter<float>("compact_first.cg"),adj,device->working<double>("edge_gradient"));
+    check(cudaGetLastError(),"compact first-layer reverse density");++compact_first_reverse_calls;
+}
 void MACELSCCuda::compute_first_layer()
 {
 
     device->active();clear_charge_results();has_local_results=false;local_energy=0;device->local_stage=0;
     device->local_metadata.clear();device->local_layouts.clear();
     device->sgemm_count=0;device->tensor_core_gemm_count=0;batched_reverse_calls=0;batched_source_reverse_calls=0;batched_source_forward_calls=0;
+    compact_first_forward_calls=0;compact_first_reverse_calls=0;
+    device->compact_first_active=use_compact_first_layer&&can_compact_first_layer;
     if(not has_geometry)throw std::runtime_error("MACELSCCuda: compute geometry first");
     const int N=num_nodes,C=num_channels,M=device->sender_nodes;
     if(device->owned_device_graph){device->owned_available={};device->owned_complete={};}
@@ -509,6 +552,8 @@ void MACELSCCuda::evaluate_local_layer(int t)
             auto A=device->working<float>("A"+std::to_string(t));
             auto M=device->working<float>("M"+std::to_string(t));
             auto H=device->working<float>("H"+std::to_string(t+1));
+            if(t==0&&device->compact_first_active)compact_first_forward();
+            else {
             device->linear("linear_up"+suffix,input_nodes,lifted_input,up,mixed);
             const auto cg=device->parameter<float>("conv_tp"+suffix+".coefficients");
             if(remote){
@@ -537,6 +582,7 @@ void MACELSCCuda::evaluate_local_layer(int t)
             check(cudaGetLastError(),"launch fused local convolution");
             // linear_t includes the exported average-neighbor normalization.
             device->linear("linear"+suffix,N,message,A,mixed);
+            }
             lsc_cuda::local_contraction<<<(nn*C+127)/128,128,0,stream>>>(N,C,types,
                 device->parameter<float>("M"+std::to_string(t)+"_weights"),A,M);
             check(cudaGetLastError(),"launch species-dependent local contraction");
@@ -1010,6 +1056,7 @@ void MACELSCCuda::reverse_local_layer(int t)
 {
     const int N=num_nodes,E=num_edges,C=num_channels;const size_t nn=N,ne=E;const auto stream=device->stream;
     const bool mixed=float32_mixed && tensor_cores;
+    const bool compact=t==0&&device->compact_first_active;
     auto h0=device->working<float>("H1_adjoint"),h1=device->working<float>("H2_adjoint");
     auto density_adj=device->working<double>("density_energy_gradient"),edge_adj=device->working<double>("edge_gradient");
         auto m_adj=device->buffer<float>("local_M_adjoint",nn*4*C),a_adj=device->buffer<float>("local_A_adjoint",nn*16*C);
@@ -1019,8 +1066,10 @@ void MACELSCCuda::reverse_local_layer(int t)
             const auto suffix="_"+std::to_string(t);const float* hidden_adj=t==0?h0:h1;
             check(cudaMemsetAsync(m_adj,0,nn*4*C*sizeof(float),stream),"clear product adjoint");
             check(cudaMemsetAsync(a_adj,0,nn*16*C*sizeof(float),stream),"clear interaction adjoint");
-            check(cudaMemsetAsync(message_adj,0,nn*40*C*sizeof(float),stream),"clear message adjoint");
-            check(cudaMemsetAsync(up_adj,0,nn*4*C*sizeof(float),stream),"clear lifted feature adjoint");
+            if(not compact){
+                check(cudaMemsetAsync(message_adj,0,nn*40*C*sizeof(float),stream),"clear message adjoint");
+                check(cudaMemsetAsync(up_adj,0,nn*4*C*sizeof(float),stream),"clear lifted feature adjoint");
+            }
             device->linear_reverse("product_linear"+suffix,N,hidden_adj,m_adj,mixed);
             if(t==1)for(int e=0;e<num_elements;++e){
                 lsc_cuda::reverse_mask<<<(nn*4*C+255)/256,256,0,stream>>>(N,C,device->working<int>("node_types"),e,hidden_adj,mask);
@@ -1029,6 +1078,7 @@ void MACELSCCuda::reverse_local_layer(int t)
             lsc_cuda::local_contraction_reverse<<<(nn*C+127)/128,128,0,stream>>>(N,C,device->working<int>("node_types"),device->parameter<float>("M"+std::to_string(t)+"_weights"),
                 device->working<float>("A"+std::to_string(t)),m_adj,a_adj);
             check(cudaGetLastError(),"reverse species product contraction");
+            if(compact){if(E)compact_first_reverse(a_adj);return;}
             device->linear_reverse("linear"+suffix,N,a_adj,message_adj,mixed);
             if(E){
                 const auto senders=device->working<int>("senders"),receivers=device->working<int>("receivers");const auto geometry=device->working<float4>("geometry");
@@ -1474,6 +1524,7 @@ void MACELSCCuda::reverse_distributed_local_layer(int t)
 {
     const int N=num_nodes,E=num_edges,C=num_channels;const int K=device->charge_legacy?N:graph_layout().num_nodes(),M=graph_layout().num_nodes();const size_t nn=N,ne=E,kk=K;const auto stream=device->stream;
     const bool mixed=float32_mixed && tensor_cores;
+    const bool compact=t==0&&device->compact_first_active;
     auto hidden=device->buffer<float>("mpi_owned_hidden",nn*4*C);
     lsc_cuda::reverse_feature_prefix<<<(nn*4*C+255)/256,256,0,stream>>>(N,M,N,C,device->working<float>(t==0?"mpi_H1_adj":"mpi_H2_adj"),hidden,false);
     auto h0=device->buffer<float>("mpi_local_input_adj",kk*4*C);check(cudaMemsetAsync(h0,0,kk*4*C*sizeof(float),stream),"clear MPI interaction input adjoint");
@@ -1486,8 +1537,10 @@ void MACELSCCuda::reverse_distributed_local_layer(int t)
             const auto suffix="_"+std::to_string(t);const float* hidden_adj=hidden;
             check(cudaMemsetAsync(m_adj,0,nn*4*C*sizeof(float),stream),"clear product adjoint");
             check(cudaMemsetAsync(a_adj,0,nn*16*C*sizeof(float),stream),"clear interaction adjoint");
-            check(cudaMemsetAsync(message_adj,0,nn*40*C*sizeof(float),stream),"clear message adjoint");
-            check(cudaMemsetAsync(up_adj,0,kk*4*C*sizeof(float),stream),"clear lifted feature adjoint");
+            if(not compact){
+                check(cudaMemsetAsync(message_adj,0,nn*40*C*sizeof(float),stream),"clear message adjoint");
+                check(cudaMemsetAsync(up_adj,0,kk*4*C*sizeof(float),stream),"clear lifted feature adjoint");
+            }
             device->linear_reverse("product_linear"+suffix,N,hidden_adj,m_adj,mixed);
             if(t==1)for(int e=0;e<num_elements;++e){
                 lsc_cuda::reverse_mask<<<(nn*4*C+255)/256,256,0,stream>>>(N,C,device->working<int>("node_types"),e,hidden_adj,mask);
@@ -1497,6 +1550,7 @@ void MACELSCCuda::reverse_distributed_local_layer(int t)
             lsc_cuda::local_contraction_reverse<<<(nn*C+127)/128,128,0,stream>>>(N,C,device->working<int>("node_types"),device->parameter<float>("M"+std::to_string(t)+"_weights"),
                 device->working<float>("A"+std::to_string(t)),m_adj,a_adj);
             check(cudaGetLastError(),"reverse species product contraction");
+            if(compact){if(E)compact_first_reverse(a_adj);return;}
             device->linear_reverse("linear"+suffix,N,a_adj,message_adj,mixed);
             if(E){
                 const auto senders=device->working<int>("senders"),receivers=device->working<int>("receivers");const auto geometry=device->working<float4>("geometry");

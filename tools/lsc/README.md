@@ -47,6 +47,21 @@ FP32/mixed and external-field settings as the original CUDA pair. The original
 pair remains the staged MPI path. The custom prebuilt LAMMPS integration below
 does not enable Kokkos; use the standard source build for this new pair.
 
+For full molecular atom storage (`atom_style full`) enable `PKG_MOLECULE=ON`.
+The CSVR/DCD density protocol additionally requires `PKG_EXTRA-FIX=ON` and
+`PKG_EXTRA-DUMP=ON`. These packages are enabled in the Rusty development source
+build. The LSC Kokkos pair synchronizes the charge DualView before device writes,
+so host exchange, sorting and restart readback can update its storage safely.
+Charges remain predictions of the exported LSC model; this synchronization does
+not make the previous LAMMPS charges an input to that model.
+
+`test_lammps_lsc_kokkos_charges.py` covers forced host rebuilds for full/charge
+atom styles, full-atom NPT/restart and the atomic style without charge storage,
+in FP32 and mixed precision. Its optional original-density checks also require
+`LSC_FULL_ATOM_DENSITY_CASE`, an isolated directory with the original input,
+model/export, frozen native FP64 outputs and `validate_density.py`. The tracked
+basic checks use the ordinary frozen stage2 fixture.
+
 The device input API consumes owned node types, owned sender/receiver indices
 and physical receiver-minus-sender image vectors. Callers finish input writes
 before `prepare_graph_device`; the evaluator copies those arrays on-device and

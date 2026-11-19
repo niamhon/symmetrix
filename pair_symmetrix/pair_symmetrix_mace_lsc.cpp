@@ -138,6 +138,7 @@ template <bool CUDA> void PairSymmetrixMACELSC<CUDA>::coeff(int narg, char **arg
       gpu->use_batched_reverse = true;
       gpu->use_batched_source_reverse = true;
       gpu->use_batched_source_forward = true;
+      gpu->use_compact_first_layer = true;
       cutoff = gpu->r_cut;
     } else {
       cpu = std::make_unique<MACELSC>(arg[2]);

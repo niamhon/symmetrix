@@ -233,6 +233,53 @@ void radial(LSCCudaParameters& model, const std::string& prefix, const json& val
     }
 }
 
+// Foundation's exact first-layer basis: keep the radial MLP's 64 hidden
+// functions and fold the fixed initial species features and linear maps into Q.
+// Other basis widths retain the existing expanded convolution path.
+void compact_first_layer(LSCCudaParameters& model,const json& j,const std::vector<double>& initial)
+{
+    constexpr int B=64,C=128;
+    const auto& values=j.at("radial_spline_values_0")[0];
+    if(values.size()!=B)return;
+    const auto v=values.get<std::vector<std::vector<double>>>();
+    const auto d=j.at("radial_spline_derivs_0")[0].get<std::vector<std::vector<double>>>();
+    const auto U=j.at("radial_weights_0").get<std::vector<std::vector<double>>>();
+    const int T=model.num_elements,K=model.num_knots-1,F=T*B;
+    const double h=(model.r_cut-model.r_min)/K;
+    std::vector<double> table(size_t(K)*4*B);
+    for(int k=0;k<K;++k)for(int n=0;n<B;++n){
+        const double a0=v[n][k],a1=h*d[n][k];
+        const double a2=3*(v[n][k+1]-v[n][k])-h*(2*d[n][k]+d[n][k+1]);
+        const double a3=2*(v[n][k]-v[n][k+1])+h*(d[n][k]+d[n][k+1]);
+        table[(size_t(k)*4+0)*B+n]=a0+a1/2+a2/4+a3/8;
+        table[(size_t(k)*4+1)*B+n]=a1+a2+0.75*a3;
+        table[(size_t(k)*4+2)*B+n]=a2+1.5*a3;
+        table[(size_t(k)*4+3)*B+n]=a3;
+    }
+    real(model,"compact_first.basis",{size_t(K),4,B},table);
+    std::vector<double> cg(16);
+    const auto& conv=j.at("conv_tp_0");
+    for(int q=0;q<16;++q)cg[conv.at("spec")[q][2].get<int>()]=conv.at("coefficients")[q];
+    real(model,"compact_first.cg",{16},cg);
+    const auto up=numbers(j.at("linear_up_0").at("weights")[0]);
+    const auto bias=numbers(j.at("linear_up_0").at("bias"));
+    std::vector<double> lifted(size_t(T)*C);
+    for(int b=0;b<T;++b)for(int c=0;c<C;++c){
+        double x=bias[c];for(int i=0;i<C;++i)x+=initial[b*C+i]*up[i*C+c];
+        lifted[b*C+c]=x;
+    }
+    for(int l=0;l<4;++l){
+        const auto W=numbers(j.at("linear_0").at("weights")[l]);
+        std::vector<double> map(size_t(F)*C);
+        for(int b=0;b<T;++b)for(int n=0;n<B;++n)for(int k=0;k<C;++k){
+            double x=0;for(int c=0;c<C;++c)x+=U[n][l*C+c]*lifted[b*C+c]*W[c*C+k];
+            map[(size_t(b)*B+n)*C+k]=x;
+        }
+        const auto name="compact_first.weights."+std::to_string(l);
+        real(model,name,{size_t(F),C},map);mixed_matrix(model,name,F,C);
+    }
+}
+
 template<int Layer> void validate_convolution(const json& file)
 {
     const auto name="conv_tp_"+std::to_string(Layer);
@@ -337,6 +384,7 @@ LSCCudaParameters prepare_lsc_cuda_parameters(const std::string& filename,const 
         real(model,prefix+".transfer_scale",{1},source.at("transfer_scale"));
         radial(model,prefix+".radial",source.at("radial_spline_values"),source.at("radial_spline_derivs"),source.at("radial_weights"),false);
     }
+    compact_first_layer(model,j,initial);
     const auto& electro=j.at("electrostatics");const auto& energy=electro.at("energy_parameters");
     real(model,"electrostatics.kspace_cutoff",{1},j.at("kspace_cutoff"));
     real(model,"electrostatics.density_smearing_width",{1},electro.at("density_smearing_width"));

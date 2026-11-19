@@ -61,6 +61,9 @@ public:
     // One-rank scalar-source forward; generic instructions retain their path.
     bool use_batched_source_forward = false;
     size_t batched_source_forward_calls = 0;
+    // Exact 64-function first-layer basis; retain the expanded path for checks.
+    bool use_compact_first_layer = false, can_compact_first_layer = false;
+    size_t compact_first_forward_calls = 0, compact_first_reverse_calls = 0;
     size_t device_parameter_bytes = 0;
     std::map<std::string, LSCCudaArray> parameter_metadata() const;
     LSCCudaArray download_parameter(const std::string& name) const;
@@ -182,6 +185,8 @@ public:
     size_t workspace_bytes() const;
     bool can_evaluate() const { return parameters_on_device; }
 private:
+    void compact_first_forward();
+    void compact_first_reverse(const float* interaction_adjoint);
     void evaluate_local_layer(int layer);
     void publish_forward_features(int layer);
     void prepare_geometry(std::span<const int> types,std::span<const int> senders,

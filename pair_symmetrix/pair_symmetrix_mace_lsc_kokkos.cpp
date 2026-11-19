@@ -25,7 +25,9 @@ PairSymmetrixMACELSCCudaKokkos::PairSymmetrixMACELSCCudaKokkos(LAMMPS *lmp) :
   kokkosable = 1;
   atomKK = static_cast<AtomKokkos *>(atom);
   execution_space = ExecutionSpaceFromDevice<LMPDeviceType>::space;
-  datamask_read = X_MASK | F_MASK | TYPE_MASK | TAG_MASK;
+  // Host exchange/sorting may modify q, even though LSC overwrites owned q.
+  // Sync its DualView before the device write, preserving ghost values too.
+  datamask_read = X_MASK | F_MASK | Q_MASK | TYPE_MASK | TAG_MASK;
   datamask_modify = F_MASK | Q_MASK | ENERGY_MASK | VIRIAL_MASK;
 }
 
