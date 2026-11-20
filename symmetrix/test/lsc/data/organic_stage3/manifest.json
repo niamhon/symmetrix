@@ -1,0 +1,1458 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-11-19T23:29:02Z",
+  "purpose": "Native PyTorch/ASE versus LAMMPS Symmetrix component parity",
+  "tolerances": {
+    "energy": 1e-06,
+    "forces": [
+      8e-05,
+      0.0001
+    ],
+    "stress": [
+      5e-07,
+      0.0001
+    ],
+    "charges": [
+      2e-06,
+      1e-05
+    ],
+    "dipole": [
+      3e-05,
+      0.0
+    ]
+  },
+  "provenance": {
+    "commit": "b5238fee78b01cedddc7bd151dec1750bebe5624",
+    "native_commit": "4d1fe8a40481be0c73507f0761f5eaf2b1d32468",
+    "binary": "/mnt/home/noneill/Programs/symmetrix-dev/.lsc-reference-logs/kokkos-charge-sync-20261119/bin/lmp-fixed",
+    "binary_sha256": "8b0fbe2e4224e2d3e910fbf2aa95c6b7b50eede38096d847ac8a872c3726197a",
+    "unchanged_sources": {
+      "libsymmetrix/source/mace_lsc_cuda_reverse_exchange.cuh": "f0cc5d5438692043744b7ffd6ea7c506c7324b1bd8574c51dabcc5c9710de918",
+      "libsymmetrix/source/mace_lsc_cuda_sources.cuh": "3af5f315e6ae8d579970f4e08a33d9c8577dd1cdc5a87f04ff7d8986a3969a46",
+      "libsymmetrix/source/mace_lsc_mesh_common.hpp": "18fcd2f3484f2a218065e61c392058a972e54d0917b0dbeec3777a0c440d7e53",
+      "libsymmetrix/source/mace_lsc_charge_exchange.hpp": "940c61c7785ef8772efe034f65ede643608021e6f2440e99af2431bdfeac0f7c",
+      "libsymmetrix/source/mace_lsc_cuda_parameters.cpp": "4814704e9e3234bcbe682e416f5241789d19195e4be79c47f59f757b4144cbf6",
+      "libsymmetrix/source/mace_lsc_cuda_mesh_stub.cpp": "b6e0c844abf8ac5201e1a7c8629530af49074bb514e0d9fdf0b5accb40397664",
+      "libsymmetrix/source/mace_lsc_cuda_tables.hpp": "305ee97b6b55d4f68bb809e2f36169eca98eba2ceaaace3a82ca746e7148aad4",
+      "libsymmetrix/source/mace_lsc_mesh.cpp": "26c925f2d34c4a2a4a6d77cf0a6ca91cb9c20d289ea3cc4d531e82a8b9962d01",
+      "libsymmetrix/source/mace_lsc_cuda.cpp": "4661a2956ffc508101efaab2d20b00070e3ce4af018cc38d8080b80985cd413b",
+      "libsymmetrix/source/mace_lsc_cuda_partition_mesh.cpp": "2ab3b59221f17477661e0cf40aba8ba0e3a9ca7973dfad7395ec0a3e9ceb5645",
+      "libsymmetrix/source/mace_lsc_cuda_charge_exchange.cuh": "069285462328af324c596118f1176b6b0f19cd5bf6b58444aa9c1c90e6d1da4f",
+      "libsymmetrix/source/mace_lsc_cuda_gemm.cuh": "c9f0ad6eefa401efffcdc27fb2004049ac53089d6e795a71bd77d029f2c82bcf",
+      "libsymmetrix/source/mace_lsc_cuda_kernels.cuh": "6a49473bf4f061834bc272291b4a6854c47c8dfd0fbd4f1a0013a21255cd346b",
+      "libsymmetrix/source/mace_lsc_cuda_compact.cuh": "ed8d55a24ca3e6c288675625f7da6e8552887772c4d3e577670882556fbe2c11",
+      "libsymmetrix/source/mace_lsc_cuda_mesh.hpp": "97f60e133c3cbe939659eeb9736ef2bbd919543ec21735b18c5f4d9e90239ae3",
+      "libsymmetrix/source/mace_lsc.cpp": "008d4201ce7830e548315529264bb3108278e1aa866fb704c4c6434dc2a0708d",
+      "libsymmetrix/source/mace_lsc_cuda_electrostatics.cuh": "e823d6a20fa03c4887e2c89420a70fa8e56d75a00fc78644970482396d09f330",
+      "libsymmetrix/source/mace_lsc_partition_mesh.hpp": "c38d3e9ad4e227fede76831bede4b46d1eceb06639bcfb1dfd2e47928194dcfc",
+      "libsymmetrix/source/mace_lsc_cuda_local.cuh": "6847255aa8e5c658b59ee6c2e1287170a74911b2da4b4762016c5fe280635fc9",
+      "libsymmetrix/source/mace_lsc_cuda_reverse.cuh": "843caad582500f407d57b35aa94a77497d5cf71d4d84d13fb8f1922294a226c5",
+      "libsymmetrix/source/mace_lsc_model.hpp": "fd4aa1e99a18553d6447a634494fbdb756a1d38b0a8b91ddb920f76ce61cb168",
+      "libsymmetrix/source/mace_lsc_mesh.hpp": "3fd5bd52f2d7e0b90717dde6f70af11e9800ea544351aebb80845070368bd553",
+      "libsymmetrix/source/mace_lsc_reverse_exchange.hpp": "27b8e8249ac21e2e3fb9fc06bf4b7a9a12cfe8d8a834ae90689aed27a82ac27a",
+      "libsymmetrix/source/mace_lsc_cuda_forward.cuh": "29b910e5384edb63454fc21a317d7ac21ead7f3e3763795ec43083ecd98fa088",
+      "libsymmetrix/source/mace_lsc_graph.hpp": "437f125e72dc19d983695f29bf17f3bf413d8529533bc46eae2ae97fae73efc4",
+      "libsymmetrix/source/mace_lsc_forward.hpp": "64111dd0c4c20cb50b199e030477993eaa32c077e74c2450404b63933b730079",
+      "libsymmetrix/source/mace_lsc_cuda_mesh.cpp": "4cd95bb62d96550a0246d03f8250a8dca9c51372e944d1f96da841f87c3c58cd",
+      "libsymmetrix/source/mace_lsc.hpp": "23dc85060d42d3731e66112f739206996d2a2b7664aa4437c020a9e5f1b13722",
+      "libsymmetrix/source/mace_lsc_cuda_partition_mesh.hpp": "a0c9235cf69e6ed542fe933cdf93143bf3042c05d5bf1fe669fd345cf67b7835",
+      "libsymmetrix/source/mace_lsc_mesh_stub.cpp": "74a50f4f28c7d8b12a95b0031a65bc6f555e672a1bd618d5c505db48af69b47b",
+      "libsymmetrix/source/mace_lsc_cuda_stub.cpp": "fe2998deca4ec43dcef6d3a35439de66d466a6e78f15a1d3eb0298259a749efc",
+      "libsymmetrix/source/mace_lsc_cuda.hpp": "a9d7656d5d69753195769ff43cfb6b797ce3fd9086348cb2a6759fc37ea4d327",
+      "libsymmetrix/source/mace_lsc_electrostatics.hpp": "272ff269698d8706d1ebb1fc55f9f808be65a6fdd2c599419fa29e7add94d9cf",
+      "pair_symmetrix/pair_symmetrix_mace_lsc_kokkos.h": "8d055125b238a291da38962f9bb430ddb45cdca21dbc8394d30afa74e941f6a5",
+      "pair_symmetrix/pair_symmetrix_mace_lsc.h": "fb473880490b7f634b803a6b34d489b9a31fb5fb8cd51910f1eee712bf3ac833",
+      "pair_symmetrix/pair_symmetrix_mace_lsc_mesh.cpp": "ef0082aa94cc81e5fc74e2a5a86350d39d81b9fbfc84b3706b277c5e13a14956",
+      "pair_symmetrix/pair_symmetrix_mace_lsc.cpp": "f7d72ed5ed353fda15e2bdc4a0bee00e5d96f557b5194c811d4c24b5bc526ad8",
+      "pair_symmetrix/pair_symmetrix_mace_lsc_kokkos.cpp": "cec6f39beab8e7a67632eaa8b0c7351236cb38ad5141f2dcd8c7a2a06ad9741e",
+      "pair_symmetrix/pair_symmetrix_mace_lsc.rst": "3cb855ddee2beddfcb6836504380f90d979cf4f80e1ed67fee2cc557cebd96b8",
+      "pair_symmetrix/pair_symmetrix_mace_lsc_mesh.h": "9364e15b4a8e04c74703c46ee9923f7772973bc98fd6a7a42dc213a29de10884"
+    },
+    "stable_binary_sha256": "0059b0a6901c33f4a79a17d1d8d5fd30d4ccae92e588cc4d6bad860b4db6311f",
+    "versions": {
+      "torch": "2.14.0",
+      "mace-scf": "0.4.4",
+      "mace-torch": "0.3.14",
+      "graph-longrange": "0.4.3",
+      "ase": "3.29.0",
+      "numpy": "2.5.3",
+      "e3nn": "0.4.4"
+    }
+  },
+  "models": {
+    "benzene": {
+      "source_model": "/mnt/home/noneill/ceph/reactive_water-1/dft2dft/fresh_baselines/direct-cluster-to-bulk/inter-intra/organic-liquids/benzene/gen2/models/e100_force100/55a/seed1/direct_c2b_benzene_pbed3_gen2_e100_force100_seed1_stage3.model",
+      "model_sha256": "040b10b8dffa1b75667b3470b9eb0ff22b603d14e5facdf3110cb61a5ab62686",
+      "export_sha256": "55a666299101231f374705f678a6778fe5bc76e8ee542aaed1858419b165d73f",
+      "atomic_numbers": [
+        1,
+        6
+      ],
+      "formal_charges": [
+        0.0,
+        0.0
+      ],
+      "cutoff_A": 5.5,
+      "spline_points": 4096,
+      "r_min_A": 0.5,
+      "cases": [
+        {
+          "id": 0,
+          "group": "cluster",
+          "source_index": 4,
+          "atoms": 12,
+          "formula": "C6H6",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 1,
+          "group": "cluster",
+          "source_index": 13,
+          "atoms": 36,
+          "formula": "C18H18",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 2,
+          "group": "cluster",
+          "source_index": 69,
+          "atoms": 48,
+          "formula": "C24H24",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 3,
+          "group": "cluster",
+          "source_index": 180,
+          "atoms": 48,
+          "formula": "C24H24",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 4,
+          "group": "cluster",
+          "source_index": 18,
+          "atoms": 60,
+          "formula": "C30H30",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 5,
+          "group": "cluster",
+          "source_index": 313,
+          "atoms": 72,
+          "formula": "C36H36",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 6,
+          "group": "cluster",
+          "source_index": 240,
+          "atoms": 96,
+          "formula": "C48H48",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 7,
+          "group": "cluster",
+          "source_index": 227,
+          "atoms": 108,
+          "formula": "C54H54",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 8,
+          "group": "cluster",
+          "source_index": 116,
+          "atoms": 132,
+          "formula": "C66H66",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 9,
+          "group": "cluster",
+          "source_index": 222,
+          "atoms": 204,
+          "formula": "C102H102",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 10,
+          "group": "isolated",
+          "source_index": 347,
+          "atoms": 1,
+          "formula": "C",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 11,
+          "group": "isolated",
+          "source_index": 348,
+          "atoms": 1,
+          "formula": "H",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 12,
+          "group": "periodic",
+          "source_index": 130,
+          "atoms": 996,
+          "formula": "C498H498",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              21.124914736335896,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              21.124914736335896,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              21.124914736335896
+            ]
+          ]
+        },
+        {
+          "id": 13,
+          "group": "periodic",
+          "source_index": 81,
+          "atoms": 996,
+          "formula": "C498H498",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              22.082838599653112,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              22.082838599653112,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              22.082838599653112
+            ]
+          ]
+        },
+        {
+          "id": 14,
+          "group": "periodic",
+          "source_index": 150,
+          "atoms": 996,
+          "formula": "C498H498",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              22.59836237380882,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              22.59836237380882,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              22.59836237380882
+            ]
+          ]
+        },
+        {
+          "id": 15,
+          "group": "periodic",
+          "source_index": 681,
+          "atoms": 996,
+          "formula": "C498H498",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              22.821539071564914,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              22.821539071564914,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              22.821539071564914
+            ]
+          ]
+        },
+        {
+          "id": 16,
+          "group": "periodic",
+          "source_index": 679,
+          "atoms": 996,
+          "formula": "C498H498",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              22.950152924638598,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              22.950152924638598,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              22.950152924638598
+            ]
+          ]
+        },
+        {
+          "id": 17,
+          "group": "periodic",
+          "source_index": 469,
+          "atoms": 996,
+          "formula": "C498H498",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              23.452419600526863,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              23.452419600526863,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              23.452419600526863
+            ]
+          ]
+        },
+        {
+          "id": 18,
+          "group": "periodic",
+          "source_index": 222,
+          "atoms": 996,
+          "formula": "C498H498",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              23.671903812572957,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              23.671903812572957,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              23.671903812572957
+            ]
+          ]
+        },
+        {
+          "id": 19,
+          "group": "periodic",
+          "source_index": 520,
+          "atoms": 996,
+          "formula": "C498H498",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              23.839080701960842,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              23.839080701960842,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              23.839080701960842
+            ]
+          ]
+        },
+        {
+          "id": 20,
+          "group": "periodic",
+          "source_index": 480,
+          "atoms": 996,
+          "formula": "C498H498",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              24.0373041629337,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              24.0373041629337,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              24.0373041629337
+            ]
+          ]
+        },
+        {
+          "id": 21,
+          "group": "periodic",
+          "source_index": 379,
+          "atoms": 996,
+          "formula": "C498H498",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              24.947840158678936,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              24.947840158678936,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              24.947840158678936
+            ]
+          ]
+        }
+      ],
+      "sources": {
+        "cluster": {
+          "path": "/mnt/home/noneill/ceph/reactive_water-1/dft2dft/fresh_baselines/direct-cluster-to-bulk/inter-intra/organic-liquids/benzene/gen2/models/e100_force100/55a/seed1/test.xyz",
+          "sha256": "1ebad744e4ed9efc6b37d00f47097e5f0cc62a7f0f8781e02ea80f4e74ebd8ad",
+          "frames": 349
+        },
+        "periodic": {
+          "path": "/mnt/home/noneill/ceph/reactive_water-1/dft2dft/fresh_baselines/direct-cluster-to-bulk/inter-intra/organic-liquids/benzene/gen2/models/e100_force100/55a/periodic_reference.extxyz",
+          "sha256": "14c122bf088ec2b24d97acb839aaae66a4d857e293caeeae4b500c98a8ad8c04",
+          "frames": 746
+        }
+      },
+      "fixtures_sha256": "b083434283f1f4984322e9d82bb1adeabce549a6de600e45312552df08743a83",
+      "reference_sha256": "c0a037982fdfa3595d13cce4efb54cd8b295f736175bb677ae27ed73c6fbb052"
+    },
+    "emc": {
+      "source_model": "/mnt/home/noneill/ceph/reactive_water-1/dft2dft/fresh_baselines/direct-cluster-to-bulk/inter-intra/organic-liquids/emc/gen2/models/e100_force100/55a/seed1/direct_c2b_emc_pbed3_gen2_e100_force100_seed1_stage3.model",
+      "model_sha256": "b2cd25764dfeb7ab03151528a938b3f959008b55fa72081d56f6ad62648fa2da",
+      "export_sha256": "dfac61ee8c29ccdbd209e182014635b745effc3cf53c6a48452261459227df21",
+      "atomic_numbers": [
+        1,
+        6,
+        8
+      ],
+      "formal_charges": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cutoff_A": 5.5,
+      "spline_points": 4096,
+      "r_min_A": 0.5,
+      "cases": [
+        {
+          "id": 0,
+          "group": "cluster",
+          "source_index": 4,
+          "atoms": 15,
+          "formula": "C4H8O3",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 1,
+          "group": "cluster",
+          "source_index": 247,
+          "atoms": 30,
+          "formula": "C8H16O6",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 2,
+          "group": "cluster",
+          "source_index": 195,
+          "atoms": 60,
+          "formula": "C16H32O12",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 3,
+          "group": "cluster",
+          "source_index": 82,
+          "atoms": 75,
+          "formula": "C20H40O15",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 4,
+          "group": "cluster",
+          "source_index": 259,
+          "atoms": 75,
+          "formula": "C20H40O15",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 5,
+          "group": "cluster",
+          "source_index": 311,
+          "atoms": 90,
+          "formula": "C24H48O18",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 6,
+          "group": "cluster",
+          "source_index": 162,
+          "atoms": 135,
+          "formula": "C36H72O27",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 7,
+          "group": "cluster",
+          "source_index": 237,
+          "atoms": 150,
+          "formula": "C40H80O30",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 8,
+          "group": "cluster",
+          "source_index": 185,
+          "atoms": 180,
+          "formula": "C48H96O36",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 9,
+          "group": "cluster",
+          "source_index": 181,
+          "atoms": 285,
+          "formula": "C76H152O57",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 10,
+          "group": "isolated",
+          "source_index": 347,
+          "atoms": 1,
+          "formula": "C",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 11,
+          "group": "isolated",
+          "source_index": 348,
+          "atoms": 1,
+          "formula": "H",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 12,
+          "group": "isolated",
+          "source_index": 349,
+          "atoms": 1,
+          "formula": "O",
+          "pbc": [
+            false,
+            false,
+            false
+          ],
+          "cell": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": 13,
+          "group": "periodic",
+          "source_index": 139,
+          "atoms": 990,
+          "formula": "C264H528O198",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              20.396449315646397,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              20.396449315646397,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              20.396449315646397
+            ]
+          ]
+        },
+        {
+          "id": 14,
+          "group": "periodic",
+          "source_index": 54,
+          "atoms": 990,
+          "formula": "C264H528O198",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              21.30603657819721,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              21.30603657819721,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              21.30603657819721
+            ]
+          ]
+        },
+        {
+          "id": 15,
+          "group": "periodic",
+          "source_index": 195,
+          "atoms": 990,
+          "formula": "C264H528O198",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              21.742424455041675,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              21.742424455041675,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              21.742424455041675
+            ]
+          ]
+        },
+        {
+          "id": 16,
+          "group": "periodic",
+          "source_index": 724,
+          "atoms": 990,
+          "formula": "C264H528O198",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              22.721725551370263,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              22.721725551370263,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              22.721725551370263
+            ]
+          ]
+        },
+        {
+          "id": 17,
+          "group": "periodic",
+          "source_index": 603,
+          "atoms": 990,
+          "formula": "C264H528O198",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              22.863494982470947,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              22.863494982470947,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              22.863494982470947
+            ]
+          ]
+        },
+        {
+          "id": 18,
+          "group": "periodic",
+          "source_index": 521,
+          "atoms": 990,
+          "formula": "C264H528O198",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              23.956370829113432,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              23.956370829113432,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              23.956370829113432
+            ]
+          ]
+        },
+        {
+          "id": 19,
+          "group": "periodic",
+          "source_index": 395,
+          "atoms": 990,
+          "formula": "C264H528O198",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              24.286148791937666,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              24.286148791937666,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              24.286148791937666
+            ]
+          ]
+        },
+        {
+          "id": 20,
+          "group": "periodic",
+          "source_index": 292,
+          "atoms": 990,
+          "formula": "C264H528O198",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              24.58813036674899,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              24.58813036674899,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              24.58813036674899
+            ]
+          ]
+        },
+        {
+          "id": 21,
+          "group": "periodic",
+          "source_index": 333,
+          "atoms": 990,
+          "formula": "C264H528O198",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              24.956177788191393,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              24.956177788191393,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              24.956177788191393
+            ]
+          ]
+        },
+        {
+          "id": 22,
+          "group": "periodic",
+          "source_index": 273,
+          "atoms": 990,
+          "formula": "C264H528O198",
+          "pbc": [
+            true,
+            true,
+            true
+          ],
+          "cell": [
+            [
+              26.77867401210051,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              26.77867401210051,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              26.77867401210051
+            ]
+          ]
+        }
+      ],
+      "sources": {
+        "cluster": {
+          "path": "/mnt/home/noneill/ceph/reactive_water-1/dft2dft/fresh_baselines/direct-cluster-to-bulk/inter-intra/organic-liquids/emc/gen2/models/e100_force100/55a/seed1/test.xyz",
+          "sha256": "0e755638705d0487d6b392edd0aeeb0c465272c0965dafaffeed751db1a660f7",
+          "frames": 350
+        },
+        "periodic": {
+          "path": "/mnt/home/noneill/ceph/reactive_water-1/dft2dft/fresh_baselines/direct-cluster-to-bulk/inter-intra/organic-liquids/emc/gen2/models/e100_force100/55a/gen1gen2_emc_periodic.extxyz",
+          "sha256": "f361c999daf95bcc6bc4d6e484e73695c8e0bc55ff296f2bb8710d4380bc08f6",
+          "frames": 800
+        }
+      },
+      "fixtures_sha256": "b9e7619431833ae656d9de5f75742594ffb8bdcad3fb8c35473661ac6a9b6b65",
+      "reference_sha256": "efe8ee89657e92131a3302050401ac7e506eb31be798a59b3a652c7caee332a7"
+    }
+  },
+  "reference_device": "NVIDIA H100 PCIe",
+  "reference_dtype": "float64",
+  "reference_use_compile": false
+}

@@ -4,6 +4,7 @@ import pytest
 
 
 def pytest_configure(config):
+    config.addinivalue_line("markers", "lsc_organic: opt-in frozen benzene/EMC native-reference pilot")
     config.addinivalue_line("markers", "lsc_lammps: requires the LSC LAMMPS development build")
     config.addinivalue_line(
         "markers", "lsc_cuda: requires the CUDA build and an allocated GPU"

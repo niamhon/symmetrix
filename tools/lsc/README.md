@@ -1,5 +1,8 @@
 # LSC development and validation on Rusty
 
+For the named tester checkpoint, conversion commands and validation scope, start
+with [CHECKPOINT.md](CHECKPOINT.md). The Rusty helpers below use local paths.
+
 The working repositories are `~/Programs/symmetrix-dev` and the separate
 `~/Programs/lammps-lsc-dev`. Original MACE-SCF and Polar source trees are references.
 The test checkpoint is the frozen stage-2 water model in `.lsc-reference-data/`;
@@ -172,3 +175,20 @@ when `pe/atom` is requested; obtaining the density gradient currently retains
 the full force-diagnostic readback on that path. Neural feature diagnostics remain
 available through the native API for debugging and tests. Ordinary MD with global
 energy and virial output avoids those dumps.
+
+## Organic snapshot validation
+
+The opt-in benzene/EMC stage-3 pilot uses frozen native PyTorch/ASE FP64
+references and the pinned compact-plus-charge-sync LAMMPS binary. It covers
+45 configurations in FP32/mixed precision, coordinate/species conventions,
+CPU FP64 spot checks and independent force/stress finite differences.
+See [ORGANIC_VALIDATION.md](ORGANIC_VALIDATION.md) for separate preparation,
+reference, comparison and pytest steps. Large artifacts and generated logs
+stay on Ceph; no duplicate build or environment is required.
+
+## NVE validation
+
+The opt-in matched timestep screen compares native ASE FP64 and actual LAMMPS
+FP32/mixed trajectories for water, benzene and EMC. See
+[NVE_VALIDATION.md](NVE_VALIDATION.md) for the protocol and saved-output checks.
+Pytest never launches these trajectories implicitly.
