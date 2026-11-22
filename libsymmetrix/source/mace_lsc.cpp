@@ -1218,6 +1218,34 @@ void MACELSC::finalize_forces(bool compute_stress)
     has_stress_results = compute_stress;
     parameters->reverse_stage=4;
 }
+std::vector<double> MACELSC::node_energies() const
+{
+    require(has_force_results,"energies","evaluate forces before partitioning total energy");
+    const auto& graph=graph_layout();
+    require(!graph.uses_remote_ghosts(),"energies","use the distributed pair for remote ghosts");
+    const auto types=graph.owned_types();
+    const auto& senders=parameters->serial_senders;const auto& receivers=graph.receivers();
+    const auto& vectors=graph.edge_vectors();const auto& positions=parameters->positions;
+    const auto& field=parameters->energy_field;
+    auto out=local_node_energies;
+    constexpr int cartesian[3]={3,1,2};
+    for(size_t i=0;i<types.size();++i){
+        for(int m=0;m<4;++m){
+            double gradient=density_energy_gradient[4*i+m];
+            if(m>0)gradient-=field[m==1?1:(m==2?2:0)];
+            out[i]+=.5*density_coefficients[4*i+m]*gradient;
+        }
+        for(int d=0;d<3;++d)
+            out[i]+=field[d]*(formal_charges[types[i]]*positions[3*i+d]
+                             +density_coefficients[4*i+cartesian[d]]);
+    }
+    for(size_t e=0;e<senders.size();++e){
+        double value=0;
+        for(int d=0;d<3;++d)value+=.5*edge_fluxes[e]*field[d]*vectors[3*e+d];
+        out[senders[e]]+=value;out[receivers[e]]+=value;
+    }
+    return out;
+}
 std::span<double> MACELSC::layer_features(int layer)
 {
     require(layer==1 || layer==2,"layer","expected layer 1 or 2");

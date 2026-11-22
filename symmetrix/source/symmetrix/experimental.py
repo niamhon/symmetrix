@@ -2,6 +2,8 @@ import warnings
 
 from ase.calculators.calculator import BaseCalculator, all_changes
 
+from .lsc_ase import MACELSC as MACELSC
+
 
 class MACEFoundation(BaseCalculator):
     implemented_properties = ["energy", "free_energy", "energies", "forces", "stress"]

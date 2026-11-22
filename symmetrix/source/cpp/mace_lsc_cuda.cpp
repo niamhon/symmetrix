@@ -60,6 +60,12 @@ void bind_mace_lsc_cuda(py::module_& m)
     },py::arg("filename"),py::arg("precision")="float32");
     auto cls=py::class_<MACELSCCuda>(m,"MACELSCCuda","Native LSC CUDA energy, charge transfers, dipoles, analytic forces and stress.");
     lsc_binding::bind_stages(cls);
+    cls.def("download_atomic_charges",[](const MACELSCCuda& self){
+        LSCCudaArray out;{py::gil_scoped_release release;out=self.download_atomic_charges();}return numpy(out);
+    },"Read only predicted atomic charges, without edge diagnostics.")
+       .def("download_node_energies",[](MACELSCCuda& self){
+        LSCCudaArray out;{py::gil_scoped_release release;out=self.download_node_energies();}return numpy(out);
+    },"Read the total-energy partition for a serial host or device graph.");
     cls.def("download_partial_charges",[](const MACELSCCuda& self){LSCCudaArray out;
         {py::gil_scoped_release release;out=self.download_partial_charges();}return numpy(out);})
        .def("download_electrostatic_potentials",[](const MACELSCCuda& self){LSCCudaArray out;

@@ -68,6 +68,34 @@ from symmetrix import Symmetrix
 See [the source code](source/symmetrix/calculator.py) and [this test](test/test_symmetrix_calc.py)
 for additional details.
 
+#### LocalSplitCharges MACE-SCF
+
+The native LSC calculator uses the existing Symmetrix CPU/CUDA evaluator:
+
+```python
+from symmetrix.experimental import MACELSC
+
+atoms.calc = MACELSC("lsc.json", device="cuda", dtype="float32-mixed")
+energy = atoms.get_potential_energy()
+forces = atoms.get_forces()
+```
+
+CPU uses `device="cpu"` and `dtype="float64"`. CUDA defaults to `float32`.
+`electrostatics="auto"` uses mesh spacing 0.7 Å/order 8 for fully periodic
+cells and direct electrostatics for clusters. Explicit `"direct"` and `"mesh"`
+are available. Partially periodic boundaries are unsupported.
+Energy, forces and periodic stress share one native evaluation; charges, dipole
+and total per-atom energies are available through ASE on request. Per-atom
+energies include electrostatics and sum to the total energy.
+
+The compiled neighbor builder is also used by public Polar's ASE calculator.
+GPU evaluation enables the tested batched and compact LSC paths. The older
+`symmetrix.lsc_calculator.LSCCalculator` remains available unchanged.
+The independent PyTorch/ASE reference remains
+`mace_scf.calculators.localsources.MACELocalSplitCharges`.
+See [the LSC ASE guide](../tools/lsc/ASE_CALCULATOR.md) for export, validation,
+boundary conventions and benchmark commands.
+
 ### Foundation-model calculators (experimental)
 
 For the models of `pair_style symmetrix/mace/foundation` (see [pair_symmetrix](../pair_symmetrix/README.md)),

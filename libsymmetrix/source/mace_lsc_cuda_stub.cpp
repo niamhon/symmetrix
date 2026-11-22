@@ -21,6 +21,10 @@ const double* MACELSCCuda::partial_charges_device()const
 {throw std::runtime_error("MACELSCCuda: CUDA support is not built");}
 const double* MACELSCCuda::node_energies_device()
 {throw std::runtime_error("MACELSCCuda: CUDA support is not built");}
+LSCCudaArray MACELSCCuda::download_atomic_charges() const
+{throw std::runtime_error("MACELSCCuda: CUDA support is not built");}
+LSCCudaArray MACELSCCuda::download_node_energies()
+{throw std::runtime_error("MACELSCCuda: CUDA support is not built");}
 std::map<std::string,LSCCudaArray> MACELSCCuda::parameter_metadata() const{return {};}
 LSCCudaArray MACELSCCuda::download_parameter(const std::string&) const
 {

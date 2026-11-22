@@ -80,6 +80,9 @@ public:
     const double* forces_device() const;
     const double* partial_charges_device() const;
     const double* node_energies_device();
+    // Node-sized readbacks also support ASE's host-supplied serial graph.
+    LSCCudaArray download_atomic_charges() const;
+    LSCCudaArray download_node_energies();
     const LSCGraph& graph_layout() const;
     std::string evaluation_stage() const;
     void pack_forward_features(int layer,std::span<const int> slots,std::span<double> values) const;
@@ -185,6 +188,7 @@ public:
     size_t workspace_bytes() const;
     bool can_evaluate() const { return parameters_on_device; }
 private:
+    const double* partition_node_energies();
     void compact_first_forward();
     void compact_first_reverse(const float* interaction_adjoint);
     void evaluate_local_layer(int layer);

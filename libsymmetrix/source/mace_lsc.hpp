@@ -147,6 +147,8 @@ public:
     // Virial: [xx,yy,zz,xy,xz,yz] in eV. Stress: ASE [xx,yy,zz,yz,xz,xy] in eV/A^3.
     std::array<double, 6> virial = {}, stress = {};
     bool has_force_results = false, has_stress_results = false;
+    // LAMMPS-compatible total-energy partition, including electrostatics/field.
+    std::vector<double> node_energies() const;
     LSCElectrostaticsContext electrostatics_context(const std::array<double, 9>& cell,
         const std::array<bool, 3>& pbc, const std::string& mode) const;
     bool can_evaluate_energy() const;

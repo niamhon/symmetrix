@@ -100,6 +100,12 @@ void bind_mace_lsc(py::module_& m)
         },py::arg("cell"),py::arg("pbc"),py::arg("pbc_handling")="auto",py::arg("external_field")=std::array<double,3>{})
        .def("evaluate_forces",&MACELSC::evaluate_forces,py::arg("compute_stress")=false,
             py::call_guard<py::gil_scoped_release>());
+    cls.def("download_node_energies",[](const MACELSC& self){
+        std::vector<double> values;
+        {py::gil_scoped_release release;values=self.node_energies();}
+        py::array_t<double> out(values.size());
+        std::copy(values.begin(),values.end(),out.mutable_data());return out;
+    },"Read the total-energy partition, including electrostatic and field energy.");
     cls.def(py::init<std::string>(), py::arg("filename"))
         .def_readonly("format_version", &MACELSC::format_version)
         .def_readonly("model_type", &MACELSC::model_type)

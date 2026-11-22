@@ -1177,6 +1177,12 @@ const double* MACELSCCuda::partial_charges_device() const
 const double* MACELSCCuda::node_energies_device()
 {
     forces_device();
+    return partition_node_energies();
+}
+const double* MACELSCCuda::partition_node_energies()
+{
+    device->active();
+    if(!has_force_results)throw std::runtime_error("MACELSCCuda: evaluate forces before partitioning total energy");
     auto out=device->buffer<double>("node_energy_partition",num_nodes);
     const auto field=device->energy_field;const auto stream=device->stream;
     if(num_nodes)lsc_cuda::node_energy_partition<<<(num_nodes+255LL)/256,256,0,stream>>>(num_nodes,
@@ -1191,6 +1197,25 @@ const double* MACELSCCuda::node_energies_device()
     check(cudaGetLastError(),"partition device node energies");
     check(cudaStreamSynchronize(stream),"complete device node energy output");
     return out;
+}
+
+LSCCudaArray MACELSCCuda::download_atomic_charges() const
+{
+    device->active();
+    if(!has_charge_results)throw std::runtime_error("MACELSCCuda: evaluate charges before readback");
+    LSCCudaArray out;out.dtype="float64";out.shape={size_t(num_nodes)};
+    out.values=std::vector<double>(num_nodes);
+    if(num_nodes)check(cudaMemcpyAsync(out.data(),device->working<double>("partial_charges"),out.bytes(),
+        cudaMemcpyDeviceToHost,device->stream),"read atomic charges");
+    check(cudaStreamSynchronize(device->stream),"complete atomic charge readback");return out;
+}
+LSCCudaArray MACELSCCuda::download_node_energies()
+{
+    const double* values=partition_node_energies();
+    LSCCudaArray out;out.dtype="float64";out.shape={size_t(num_nodes)};
+    out.values=std::vector<double>(num_nodes);
+    if(num_nodes)check(cudaMemcpyAsync(out.data(),values,out.bytes(),cudaMemcpyDeviceToHost,device->stream),"read atomic energies");
+    check(cudaStreamSynchronize(device->stream),"complete atomic energy readback");return out;
 }
 
 void MACELSCCuda::prepare_graph(const LSCGraph& input)
