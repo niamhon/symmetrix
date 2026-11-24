@@ -7,7 +7,7 @@ provenance, species, coordinates, formal-charge/field requirements, PBC and atom
 type numbering. Retain an existing input's requested temperature, pressure,
 timestep, duration and output choices unless explaining a necessary correction.
 
-Activate the stable environment described in the runtime reference. It contains
+Activate the validated clean environment described in clean-runtime.md. It contains
 non-editable pinned Symmetrix and MACE-SCF packages. Do not add development
 checkouts to its Python path or install project dependencies into this frozen
 environment. Export to a new project file, preserving existing exports:
@@ -50,29 +50,13 @@ Use `realspace` for a nonperiodic cluster and omit stress when not meaningful.
 Native CUDA FP64 is also usable in a suitable allocation. Keep stress enabled
 for NPT; a compiled calculator lacking stress cannot validate that workflow.
 
-The native Symmetrix ASE wrapper is:
-
-```python
-from symmetrix.lsc_calculator import LSCCalculator
-
-fast = LSCCalculator(
-    str(export_path), device="cuda", precision="float32",
-    pbc_handling="mixed_periodic", external_field=(0.0, 0.0, 0.0),
-)
-if fast.device == "cuda":
-    fast.model.use_batched_reverse = True
-fast.model.set_mesh_electrostatics(0.7, 8)
-fast.calculate(atoms, properties=["energy", "forces", "stress"])
-```
-
-Adapt the field to the requested physics. CPU uses `device="cpu"`, FP64; GPU
-mixed uses `precision="float32-mixed"`. Omit the mesh setter for direct
-evaluation. Spacing 0.7 Å/order 8 is a tested starting point, not a universal
-mesh-accuracy guarantee. Cluster calculations must use direct mode.
-
-The CUDA LAMMPS pair already selects receiver-batched reverse evaluation. The
-Python class retains a legacy reverse default for diagnostics; enable the flag
-above to select the same optimized path when using its ASE wrapper.
+The preferred Symmetrix ASE interface is `symmetrix.experimental.MACELSC`;
+see clean-runtime.md for the CPU/direct and CUDA/mesh examples. It selects the
+optimized LSC evaluator and exposes ASE energies, forces, stress, charges and
+dipole with cache/field invalidation. Use FP32 by default; mixed is opt-in and
+CPU is FP64. Spacing 0.7 Angstrom/order 8 is a tested starting point, not a
+universal accuracy guarantee. Clusters use direct electrostatics. The native
+reference calculator remains unchanged.
 
 Existing native-reference gates are energy error `<1e-6 eV/atom`, forces
 `allclose(atol=8e-5 eV/Å, rtol=1e-4)` and periodic stress
@@ -104,22 +88,23 @@ boundary p p p
 atom_modify map yes
 newton on
 read_data initial.data
-pair_style symmetrix/mace/lsc/cuda mesh 0.7 order 8
+pair_style symmetrix/mace/lsc/cuda/kk mesh 0.7 order 8
 pair_coeff * * model.symmetrix.json O H
 ```
 
 `O H` means type 1 is O and type 2 is H; derive this from the actual data, not
 JSON species order. Existing `atom_style full` inputs require MOLECULE support.
 
-- CPU pair is `symmetrix/mace/lsc`; CUDA is `symmetrix/mace/lsc/cuda`.
-- Append `float32-mixed` for mixed neural arithmetic.
+- CPU pair is `symmetrix/mace/lsc`; optimized GPU is `symmetrix/mace/lsc/cuda/kk`.
+- The CUDA pair uses FP32 by default. Add the `float32-mixed` option only
+  when the user explicitly requests mixed precision.
 - Direct mode requires one MPI process. Mesh supports normal multi-rank MD.
-- CUDA invokes its own native evaluator: no `/kk` suffix or required `-sf kk`.
+- The optimized GPU route uses `-k on g 1 -sf kk -pk kokkos newton on neigh half`.
 - Use `units metal`, atom IDs and `newton pair on`. Global stress and per-atom
   energies are supported; per-atom virials are not.
 - With a charge-capable atom style, `q` is a predicted model output, not an
   independent charge-equilibration variable.
-- `compute mu all pair symmetrix/mace/lsc/cuda` returns total dipole components.
+- `compute mu all pair symmetrix/mace/lsc/cuda/kk` returns total dipole components.
   The optional `field Ex Ey Ez` is in eV/(e Å), energy convention `+ E·mu`.
 - Reissue `pair_style` and `pair_coeff` after `read_restart`: model parameters
   are not stored in binary restart files.

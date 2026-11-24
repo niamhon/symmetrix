@@ -1,26 +1,26 @@
 ---
 name: symmetrix-lsc
-description: Export LocalSplitCharges MACE-SCF models for the native Symmetrix LSC backend, validate predictions against ASE, and prepare or run LAMMPS simulations using the stable Rusty installation. Use for this LSC implementation, rather than MACE-POLAR, foundation MACE, or model training.
+description: Export LocalSplitCharges MACE-SCF models for the native Symmetrix LSC backend, validate predictions against ASE, and prepare or run LAMMPS simulations using the validated clean Rusty installation. Use for this LSC implementation, rather than MACE-POLAR, foundation MACE, or model training.
 ---
 
 # Symmetrix LSC
 
-Use the validated stable installation for new scientific projects. Its initial
-release is pinned to `2762b9fc10791220eef38edbe8e3fd70a9a1a124` from
-`https://github.com/niamhon/symmetrix`. Development continues separately on branch
-`symmetrix/lsc-mace` in `symmetrix-dev`; do not redirect ordinary project jobs to
-its editable environment or binary.
+Use the validated clean Rusty release for new scientific projects, tag
+`lsc-clean-20261124` on branch `symmetrix/lsc-clean` of
+`https://github.com/niamhon/symmetrix`. Read its manifest before use; the physical
+release is `/mnt/home/noneill/ceph/symmetrix-lsc-releases/releases/lsc-clean-20261124`.
+The new-project wrapper is `/mnt/home/noneill/Programs/symmetrix-lsc/activate.sh`.
+Legacy stable `2762b9f` remains separate for projects already pinned to it.
 
-The exporter, native CPU/CUDA evaluator and LAMMPS pair belong to Symmetrix;
-pinned original MACE-SCF supplies the ASE reference. Resolve the stable release
-once during project setup and record that physical path in the run scripts and
-manifest. Preserve each released environment and binary; promote later validated
-versions into new release directories instead of rebuilding an existing release.
+The exporter, native CPU/CUDA evaluator, ASE interface and LAMMPS Kokkos pair
+belong to Symmetrix. Pinned original MACE-SCF supplies the independent PyTorch
+reference. Development and dispersion experiments remain separate. Resolve the
+release once per project and record its physical path. Preserve released
+artifacts; do not rebuild a frozen release in place.
 
 Read [the project workflow](references/project-workflow.md) for a new model or
-simulation. Read [the runtime reference](references/rusty-runtime.md) for Rusty
-paths, environments, launchers and installation on another host. Reuse an
-existing stable setup; installing on a new host is a separate task.
+simulation and [the clean runtime reference](references/clean-runtime.md) for
+Rusty paths, the ASE API and LAMMPS launch settings.
 
 ## Essential decisions
 
@@ -39,8 +39,10 @@ existing stable setup; installing on a new host is a separate task.
   cells. Mesh requires full 3D periodicity. Slabs, compensating-jellium variants
   and per-atom virials are unsupported. Preserve architecture validation;
   report unsupported models instead of silently changing them.
-- CPU uses FP64. GPU neural modes are FP32 and `float32-mixed`, with FP64
-  electrostatics/reductions; GPU FP64 neural evaluation is not implemented.
+- Use FP32 (`float32`) neural evaluation for new GPU runs unless the user
+  explicitly specifies another mode. Enable `float32-mixed` only on explicit
+  request. CPU evaluation is fixed at FP64. GPU electrostatics and reductions
+  use FP64 in both neural modes.
 - Electrostatics is already included. Do not double-count it using a separate
   Coulomb pair or `kspace_style`. Required added dispersion is a distinct
   interaction needing a validated setup.
